@@ -56,8 +56,8 @@ final class ClipboardHistory {
     @ObservationIgnored private var changeCount = NSPasteboard.general.changeCount
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private let ioQueue = DispatchQueue(label: "notch.clipboard", qos: .utility)
+    @ObservationIgnored private let settings: AppSettings
 
-    private static let limit = 50
     static let folder: URL = {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return support.appendingPathComponent("NotchApp/Clipboard", isDirectory: true)
@@ -70,7 +70,8 @@ final class ClipboardHistory {
         "com.agilebits.onepassword", "de.petermaurer.TransientPasteboardType", "Pasteboard generator type",
     ]
 
-    init() {
+    init(settings: AppSettings) {
+        self.settings = settings
         try? FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
         if let data = try? Data(contentsOf: Self.historyFile),
            let saved = try? JSONDecoder().decode([ClipItem].self, from: data) {
@@ -134,6 +135,8 @@ final class ClipboardHistory {
         let pasteboard = NSPasteboard.general
         guard pasteboard.changeCount != changeCount else { return }
         changeCount = pasteboard.changeCount
+        // The counter still advances while paused, so resuming doesn't pick up what was copied meanwhile.
+        guard !settings.clipboardPaused else { return }
         guard let types = pasteboard.types,
               !types.contains(where: { Self.ignoredTypes.contains($0.rawValue) }) else { return }
 
@@ -182,13 +185,17 @@ final class ClipboardHistory {
         }
         entry.date = Date()
         items.insert(entry, at: 0)
+        applyLimit()
+    }
 
+    /// Drops the oldest non-favorites beyond the history size from Settings.
+    func applyLimit() {
         var kept = 0
         var evicted: [ClipItem] = []
         items.removeAll { candidate in
             guard !candidate.favorite else { return false }
             kept += 1
-            if kept > Self.limit { evicted.append(candidate); return true }
+            if kept > settings.clipboardLimit { evicted.append(candidate); return true }
             return false
         }
         evicted.forEach(deleteImageIfUnused)

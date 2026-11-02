@@ -1,0 +1,381 @@
+import ServiceManagement
+import SwiftUI
+
+private enum SettingsSection: String, CaseIterable {
+    case general = "General"
+    case agents = "Agents"
+    case pages = "Pages"
+    case timer = "Focus Timer"
+    case clipboard = "Clipboard & Files"
+
+    var symbol: String {
+        switch self {
+        case .general: "gearshape.fill"
+        case .agents: "sparkles"
+        case .pages: "square.grid.2x2.fill"
+        case .timer: "timer"
+        case .clipboard: "doc.on.clipboard.fill"
+        }
+    }
+}
+
+/// Opened from the gear in the top bar; takes the place of the current page.
+struct SettingsView: View {
+    let model: NotchModel
+    @State private var section = SettingsSection.general
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(SettingsSection.allCases, id: \.self) { item in
+                    SidebarButton(title: item.rawValue, symbol: item.symbol, selected: section == item) { section = item }
+                }
+                Spacer(minLength: 0)
+                SidebarButton(title: "Quit NotchLab", symbol: "power", selected: false) { NSApp.terminate(nil) }
+                Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–")")
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.3))
+                    .padding(.leading, 10)
+                    .padding(.top, 2)
+            }
+            .frame(width: 164)
+
+            Card(padding: 12) {
+                VStack(alignment: .leading, spacing: 0) {
+                    switch section {
+                    case .general: GeneralSettings(model: model)
+                    case .agents: AgentSettings(settings: model.settings)
+                    case .pages: PageSettings(model: model)
+                    case .timer: TimerSettings(timer: model.focusTimer, settings: model.settings)
+                    case .clipboard: ClipboardSettings(model: model)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: Sections
+
+private struct GeneralSettings: View {
+    let model: NotchModel
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+
+    var body: some View {
+        let settings = model.settings
+        SettingRow(title: "Launch at login", detail: "Open NotchLab when you log in") {
+            SwitchView(isOn: launchAtLogin) {
+                do {
+                    if launchAtLogin { try SMAppService.mainApp.unregister() } else { try SMAppService.mainApp.register() }
+                } catch {
+                    NSLog("Launch at login change failed: \(error.localizedDescription)")
+                }
+                launchAtLogin = SMAppService.mainApp.status == .enabled
+            }
+        }
+        RowDivider()
+        SettingRow(title: "Open after hovering", detail: "How long to rest on the notch") {
+            Choice(options: [("Instant", 0.1), ("Short", 0.3), ("Long", 0.6)],
+                   selection: settings.openDelay) { settings.openDelay = $0 }
+        }
+        RowDivider()
+        SettingRow(title: "Close after leaving", detail: "How long the panel waits for you") {
+            Choice(options: [("Instant", 0.15), ("Short", 0.5), ("Long", 1.0)],
+                   selection: settings.closeDelay) { settings.closeDelay = $0 }
+        }
+        RowDivider()
+        SettingRow(title: "Open to", detail: "The page you see when the notch opens") {
+            MenuButton(title: settings.startTab?.title ?? "Last page used") {
+                [ActionMenuItem("Last page used", checked: settings.startTab == nil) { settings.startTab = nil }, .separator()]
+                    + model.visibleTabs.map { tab in
+                        ActionMenuItem(tab.title, checked: settings.startTab == tab) { settings.startTab = tab }
+                    }
+            }
+        }
+    }
+}
+
+private struct AgentSettings: View {
+    let settings: AppSettings
+    @State private var connected: Set<AgentKind> = []
+
+    var body: some View {
+        agentRow(.claude, title: "Claude Code", detail: "Questions and approvals come to the notch")
+        RowDivider()
+        agentRow(.codex, title: "Codex", detail: "Run /hooks in Codex once to trust it")
+        RowDivider()
+        SettingRow(title: "Flash when an agent finishes", detail: "A green Done beside the closed notch") {
+            SwitchView(isOn: settings.showFinishedAlert) { settings.showFinishedAlert.toggle() }
+        }
+        Spacer(minLength: 0)
+        Text("Connecting adds NotchLab's helper to the agent's hook settings. Open sessions need a restart.")
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(.white.opacity(0.35))
+            .fixedSize(horizontal: false, vertical: true)
+            .onAppear(perform: refresh)
+    }
+
+    private func agentRow(_ agent: AgentKind, title: String, detail: String) -> some View {
+        let isConnected = connected.contains(agent)
+        return SettingRow(title: title, detail: isConnected ? detail : "Not connected", icon: agent) {
+            SwitchView(isOn: isConnected) {
+                setAgentHooks(agent, connected: !isConnected)
+                refresh()
+            }
+        }
+    }
+
+    private func refresh() {
+        connected = Set([AgentKind.claude, .codex].filter(AgentHooks.isConnected))
+    }
+}
+
+private struct PageSettings: View {
+    let model: NotchModel
+
+    var body: some View {
+        pageRow(.shelf, detail: "A file shelf with AirDrop. Dragged files open it.")
+        RowDivider()
+        pageRow(.reminders, detail: "Your Apple Reminders lists")
+        RowDivider()
+        pageRow(.dev, detail: "Usage and sessions. Shows up anyway when an agent asks.")
+        RowDivider()
+        SettingRow(title: "Mirror button", detail: "The camera button on Home") {
+            SwitchView(isOn: model.settings.showMirrorButton) {
+                model.settings.showMirrorButton.toggle()
+                if !model.settings.showMirrorButton { model.mirror.isOn = false }
+            }
+        }
+    }
+
+    private func pageRow(_ tab: NotchTab, detail: String) -> some View {
+        let shown = !model.settings.hiddenTabs.contains(tab)
+        return SettingRow(title: tab.title, detail: detail) {
+            SwitchView(isOn: shown) { model.setTab(tab, hidden: shown) }
+        }
+    }
+}
+
+private struct TimerSettings: View {
+    let timer: FocusTimer
+    let settings: AppSettings
+    private static let ranges = ["Focus": 5...120, "Break": 1...30, "Deep": 10...180]
+    private static let sounds = ((try? FileManager.default.contentsOfDirectory(atPath: "/System/Library/Sounds")) ?? [])
+        .map { ($0 as NSString).deletingPathExtension }
+        .sorted()
+
+    var body: some View {
+        ForEach(FocusTimer.presets) { preset in
+            SettingRow(title: preset.name, detail: preset.isBreak ? "Short rest between sessions" : nil) {
+                MinutesStepper(value: timer.minutes(for: preset), range: Self.ranges[preset.name] ?? 1...180,
+                               step: preset.isBreak ? 1 : 5) { timer.setMinutes($0, for: preset) }
+            }
+            RowDivider()
+        }
+        SettingRow(title: "Sound when done", detail: "Plays when a countdown ends") {
+            MenuButton(title: settings.timerSound.isEmpty ? "None" : settings.timerSound) {
+                [ActionMenuItem("None", checked: settings.timerSound.isEmpty) { settings.timerSound = "" }, .separator()]
+                    + Self.sounds.map { name in
+                        ActionMenuItem(name, checked: settings.timerSound == name) {
+                            settings.timerSound = name
+                            NSSound(named: name)?.play()
+                        }
+                    }
+            }
+        }
+        RowDivider()
+        SettingRow(title: "Celebration", detail: "Confetti and a check beside the notch") {
+            SwitchView(isOn: settings.timerCelebration) { settings.timerCelebration.toggle() }
+        }
+    }
+}
+
+private struct ClipboardSettings: View {
+    let model: NotchModel
+
+    var body: some View {
+        let settings = model.settings
+        let clipCount = model.clipboard.items.filter { !$0.favorite }.count
+        SettingRow(title: "Keep in history", detail: "Favorites are always kept") {
+            Choice(options: [("25", 25), ("50", 50), ("100", 100), ("200", 200)], selection: settings.clipboardLimit) {
+                settings.clipboardLimit = $0
+                model.clipboard.applyLimit()
+            }
+        }
+        RowDivider()
+        SettingRow(title: "Pause history", detail: "Nothing you copy is saved while paused") {
+            SwitchView(isOn: settings.clipboardPaused) { settings.clipboardPaused.toggle() }
+        }
+        RowDivider()
+        SettingRow(title: "Clear clipboard history", detail: "\(clipCount) \(clipCount == 1 ? "item" : "items") · favorites stay") {
+            PillButton(title: "Clear", action: model.clipboard.clearHistory).disabled(clipCount == 0)
+        }
+        RowDivider()
+        let fileCount = model.shelf.items.count
+        SettingRow(title: "Clear file shelf", detail: "\(fileCount) \(fileCount == 1 ? "file" : "files") on the shelf") {
+            PillButton(title: "Clear", action: model.shelf.clear).disabled(fileCount == 0)
+        }
+    }
+}
+
+// MARK: Controls
+
+private struct SidebarButton: View {
+    let title: String
+    let symbol: String
+    let selected: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 16)
+                Text(title).font(.system(size: 12, weight: .semibold))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(.white.opacity(selected ? 1 : (hovering ? 0.8 : 0.55)))
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(selected ? 0.12 : 0)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+}
+
+private struct SettingRow<Control: View>: View {
+    let title: String
+    var detail: String?
+    var icon: AgentKind?
+    @ViewBuilder let control: Control
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let icon { AgentIcon(agent: icon, size: 18) }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 12, weight: .semibold))
+                if let detail {
+                    Text(detail)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+            }
+            .lineLimit(1)
+            Spacer(minLength: 8)
+            control
+        }
+        .frame(height: 40)
+    }
+}
+
+private struct RowDivider: View {
+    var body: some View {
+        Rectangle().fill(.white.opacity(0.07)).frame(height: 1)
+    }
+}
+
+/// A small segmented control in the notch's style.
+private struct Choice<Value: Equatable>: View {
+    let options: [(label: String, value: Value)]
+    let selection: Value
+    let select: (Value) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options.indices, id: \.self) { index in
+                let option = options[index]
+                let selected = option.value == selection
+                Button { select(option.value) } label: {
+                    Text(option.label)
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(selected ? 1 : 0.5))
+                        .padding(.horizontal, 9)
+                        .frame(height: 20)
+                        .background(Capsule().fill(.white.opacity(selected ? 0.2 : 0)))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(Capsule().fill(.white.opacity(0.07)))
+    }
+}
+
+private struct MenuButton: View {
+    let title: String
+    let items: () -> [NSMenuItem]
+
+    var body: some View {
+        Button { popUpMenu(items()) } label: {
+            HStack(spacing: 5) {
+                Text(title).font(.system(size: 11, weight: .semibold))
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(.white.opacity(0.85))
+            .padding(.horizontal, 10)
+            .frame(height: 24)
+            .background(Capsule().fill(.white.opacity(0.1)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct MinutesStepper: View {
+    let value: Int
+    let range: ClosedRange<Int>
+    let step: Int
+    let set: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            stepButton("minus", label: "Shorter", enabled: value > range.lowerBound) {
+                set(max(range.lowerBound, value - step))
+            }
+            Text("\(value) min")
+                .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                .frame(width: 52)
+            stepButton("plus", label: "Longer", enabled: value < range.upperBound) {
+                set(min(range.upperBound, value + step))
+            }
+        }
+        .frame(height: 24)
+        .background(Capsule().fill(.white.opacity(0.1)))
+    }
+
+    private func stepButton(_ symbol: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 9, weight: .bold))
+                .frame(width: 26, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.3)
+        .accessibilityLabel(label)
+    }
+}
+
+private struct PillButton: View {
+    let title: String
+    let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .padding(.horizontal, 12)
+                .frame(height: 22)
+                .background(Capsule().fill(.white.opacity(0.14)))
+        }
+        .buttonStyle(PressableStyle())
+        .opacity(isEnabled ? 1 : 0.4)
+    }
+}

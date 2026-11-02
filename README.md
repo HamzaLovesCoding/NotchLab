@@ -32,7 +32,7 @@ Requires an **Apple silicon Mac** and **macOS 14 or later**.
 
    Or skip the prompt from Terminal: `xattr -dr com.apple.quarantine /Applications/NotchApp.app`
 
-Hover over the notch to get started. You can turn on **Launch at Login** from the settings menu. Allow Camera and Reminders access when you use those features; controlling some VPN apps also requires Accessibility access.
+Hover over the notch to get started. Click the gear for **Settings**: Launch at Login, hover timing, which pages show, focus timer lengths, clipboard history, and connecting your agents. Allow Camera and Reminders access when you use those features; controlling some VPN apps also requires Accessibility access.
 
 ## Build from source
 
@@ -48,7 +48,16 @@ This builds, installs, and opens `/Applications/NotchApp.app`. Use `./build.sh -
 
 ## Agent questions and approvals
 
-NotchLab shows Claude Code and Codex permission requests in the notch with **Allow** and **Deny**, lets you answer Claude's multiple-choice questions there, and flashes a side alert when an agent finishes. Building the app doesn't install hooks; add the bundled `notch-hook` helper to each tool yourself. If your config already has a `hooks` section, merge these entries into it.
+NotchLab shows Claude Code and Codex permission requests in the notch with **Allow** and **Deny**, lets you answer Claude's multiple-choice questions there, and flashes a side alert when an agent finishes.
+
+**To connect:** open the **Dev** page and click **Connect Claude** and **Connect Codex**, or switch them on under **Settings → Agents**. NotchLab adds its bundled `notch-hook` helper to `~/.claude/settings.json` and `~/.codex/hooks.json`, keeps everything else in those files, and saves a one-time backup next to each as `*.before-notchapp`. Then:
+
+- **Codex:** run `/hooks` in Codex once and trust NotchLab's hooks. Codex won't run new hooks until you do.
+- Restart any Claude Code or Codex sessions that were already open.
+
+Run NotchApp from your Applications folder before connecting, since the hooks point at the app's location. To undo, switch the agent off in Settings before you delete the app.
+
+**Manual setup:** if you'd rather edit the files yourself, add these entries. If your config already has a `hooks` section, merge them into it.
 
 **Claude Code:** `~/.claude/settings.json`
 

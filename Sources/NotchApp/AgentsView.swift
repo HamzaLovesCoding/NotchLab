@@ -203,20 +203,44 @@ private func actionButton(_ title: String, fill: Color, action: @escaping () -> 
 /// Recent Claude Code / Codex sessions, in the space the stat cards used to take.
 struct AgentSessionsCard: View {
     let monitor: AgentMonitor
+    @State private var unconnected: [AgentKind] = []
 
     var body: some View {
         Card(padding: 8) {
             if monitor.sessions.isEmpty {
-                VStack(spacing: 4) {
-                    HStack(spacing: 6) {
-                        AgentIcon(agent: .claude, size: 14)
-                        AgentIcon(agent: .codex, size: 14)
+                VStack(spacing: 6) {
+                    if unconnected.isEmpty {
+                        HStack(spacing: 6) {
+                            AgentIcon(agent: .claude, size: 14)
+                            AgentIcon(agent: .codex, size: 14)
+                        }
                     }
-                    Text("Claude and Codex questions show up here")
+                    Text(unconnected.isEmpty ? "Claude and Codex questions show up here"
+                                             : "Connect to answer agent questions here")
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(.white.opacity(0.4))
+                    if !unconnected.isEmpty {
+                        HStack(spacing: 6) {
+                            ForEach(unconnected, id: \.self) { agent in
+                                Button {
+                                    setAgentHooks(agent, connected: true)
+                                    refresh()
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        AgentIcon(agent: agent, size: 13)
+                                        Text("Connect \(agent.name)").font(.system(size: 11, weight: .bold))
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .frame(height: 22)
+                                    .background(Capsule().fill(.white.opacity(0.14)))
+                                }
+                                .buttonStyle(PressableStyle())
+                            }
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onAppear(perform: refresh)
             } else {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 2) {
@@ -228,6 +252,34 @@ struct AgentSessionsCard: View {
             }
         }
     }
+
+    private func refresh() {
+        unconnected = [AgentKind.claude, .codex].filter { !AgentHooks.isConnected($0) }
+    }
+}
+
+/// Connects or disconnects an agent's hooks, explaining anything the user still has to do.
+@MainActor
+func setAgentHooks(_ agent: AgentKind, connected: Bool) {
+    do {
+        if connected { try AgentHooks.connect(agent) } else { try AgentHooks.disconnect(agent) }
+        // Codex won't run a new hook until the user reviews it, and NotchLab shouldn't skip that check.
+        if connected, agent == .codex {
+            showAlert("Codex is connected", "In Codex, run /hooks once and trust NotchLab's hooks. Codex sessions that are already open need a restart.")
+        }
+    } catch {
+        showAlert("Couldn't \(connected ? "connect" : "disconnect") \(agent.name)", error.localizedDescription)
+    }
+}
+
+@MainActor
+private func showAlert(_ title: String, _ message: String) {
+    let alert = NSAlert()
+    alert.messageText = title
+    alert.informativeText = message
+    // The notch never takes focus on its own, so bring the app forward or the alert opens behind.
+    NSApp.activate()
+    alert.runModal()
 }
 
 private struct SessionRow: View {
