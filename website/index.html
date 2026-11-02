@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f6f5f1">
+    <meta name="description" content="Answer Claude, approve Codex, play your music, and park your files. NotchLab turns your Mac's notch into a small native workspace.">
+    <meta property="og:title" content="NotchLab — Your workflow. One notch away.">
+    <meta property="og:description" content="Answer your coding agents, control your music, and keep files, notes, and reminders one hover away.">
+    <meta property="og:type" content="website">
+    <title>NotchLab — Your workflow. One notch away.</title>
+    <link rel="icon" type="image/png" href="assets/notchlab-icon.png">
+    <link rel="stylesheet" href="styles.css">
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header wrap">
+      <a class="brand" href="#" aria-label="NotchLab home"><img src="assets/notchlab-icon.png" alt="" width="44" height="44">NotchLab<span class="brand-period">.</span></a>
+      <nav aria-label="Main navigation"><a href="#agents">Agents</a><a href="#system">System</a><a href="#features">Features</a><a href="#questions">FAQs</a><a class="nav-cta" href="#install">Get NotchLab <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+    <main id="main">
+      <section class="hero wrap" aria-labelledby="hero-title">
+        <div class="eyebrow"><span class="status-dot"></span> A little more Mac. A lot more useful.
+        </div>
+        <h1 id="hero-title">Your workflow.<br><span>One notch away.</span>
+        </h1>
+        <p class="hero-description">Answer Claude, watch your Mac, jot a note, play your music.<br>A native workspace tucked into the top of your Mac.
+        </p>
+        <div class="hero-actions"><a class="button primary" href="https://github.com/HamzaLovesCoding/NotchLab/releases/download/v1.0.0/NotchLab.dmg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 17v4h14v-4"/></svg>Download for Mac</a><a class="text-link" href="#explore">Take a look <span aria-hidden="true">↓</span></a>
+        </div>
+        <p class="compatibility">v1.0 <span>·</span> macOS 14+ <span>·</span> Apple silicon <span>·</span> Free
+        </p>
+        <div class="product-showcase" id="explore">
+          <div class="showcase-heading"><span class="mono">01 / MEET YOUR NEW TOP BAR</span><span class="preview-hint">Four spaces. One hover.</span>
+          </div>
+          <div class="desktop">
+            <div class="desktop-menubar" aria-hidden="true"><span class="desktop-app">◈ &nbsp; NotchLab <span>File &nbsp; Edit</span></span><span class="desktop-clock">Made for your Mac <span>⌘</span></span>
+            </div>
+            <div class="preview-content" id="preview-panel" role="tabpanel" aria-labelledby="tab-dev" tabindex="0"><div class="camera-notch" aria-hidden="true"><span></span></div><img id="preview-image" src="assets/notch-developer.png" width="1520" height="692" alt="NotchLab Dev page with Claude and Codex usage limits, CPU, memory, and GPU rings, and recent agent sessions" fetchpriority="high">
+            </div>
+            <div class="desktop-bottom"><span class="tiny-cross" aria-hidden="true">+</span>
+              <p id="preview-caption" aria-live="polite">Your limits, your Mac, and every agent session. One glance.
+              </p>
+              <span class="tiny-cross" aria-hidden="true">+</span>
+            </div>
+          </div>
+          <div class="preview-controls" role="tablist" aria-label="Explore NotchLab pages">
+            <button id="tab-dev" role="tab" aria-selected="true" aria-controls="preview-panel" data-view="developer"><span aria-hidden="true">&gt;_</span> Dev</button>
+            <button id="tab-home" role="tab" aria-selected="false" aria-controls="preview-panel" tabindex="-1" data-view="home"><span aria-hidden="true">⌂</span> Home</button>
+            <button id="tab-files" role="tab" aria-selected="false" aria-controls="preview-panel" tabindex="-1" data-view="files"><span aria-hidden="true">▱</span> Files</button>
+            <button id="tab-reminders" role="tab" aria-selected="false" aria-controls="preview-panel" tabindex="-1" data-view="reminders"><span aria-hidden="true">☷</span> Reminders</button>
+          </div>
+          <p class="preview-note">The real interface, with demo data.
+          </p>
+        </div>
+      </section>
+      <section class="intro wrap" aria-labelledby="intro-title">
+        <p class="eyebrow">LESS BACK AND FORTH
+        </p>
+        <h2 id="intro-title">Stay in your flow.<br>We’ll stay <em>out of the way.</em>
+        </h2>
+        <p>Hover to open. Move away to close. NotchLab keeps the things you reach for close, without giving you another window to manage.
+        </p>
+      </section>
+      <section class="specs wrap" aria-label="NotchLab at a glance">
+        <div><strong>2.5 MB</strong><span class="mono">THE WHOLE DOWNLOAD</span>
+        </div>
+        <div><strong>&lt;1%</strong><span class="mono">CPU WHILE IT WAITS</span>
+        </div>
+        <div><strong>Zero</strong><span class="mono">ACCOUNTS OR ANALYTICS</span>
+        </div>
+      </section>
+      <section class="developer-section wrap" id="agents" aria-labelledby="dev-title">
+        <div class="developer-copy"><span class="section-number">01 — FOR THE BUILD</span>
+          <h2 id="dev-title">Agents ask.<br>Answer up top.
+          </h2>
+          <p>When Claude has a question or Codex needs permission, it shows up in the notch. Pick an answer, hit Allow, and the agent keeps going. No hunting for the right terminal.
+          </p>
+          <ul class="feature-list">
+            <li><span aria-hidden="true">↗</span> Answer Claude’s questions in the notch
+            </li>
+            <li><span aria-hidden="true">↗</span> Allow or deny Claude and Codex requests
+            </li>
+            <li><span aria-hidden="true">↗</span> Every session: working, waiting, or done
+            </li>
+            <li><span aria-hidden="true">↗</span> Session and weekly limits, tokens, and cost
+            </li>
+          </ul>
+          <a class="text-link" href="#setup-note">How to connect Claude and Codex <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="dev-art">
+          <div class="art-label"><span class="status-dot"></span> CLAUDE HAS A QUESTION
+          </div>
+          <img src="assets/agent-question.png" alt="A Claude question with four answer options inside the notch, with Send and Terminal buttons" width="1520" height="692" loading="lazy">
+          <div class="art-footer"><span>Pick one. Hit Send.</span><span class="mono">&gt;_ BACK TO WORK</span>
+          </div>
+        </div>
+      </section>
+      <section class="agent-cards wrap" aria-label="More for your agents">
+        <div class="everyday-grid">
+          <article class="feature-card">
+            <div class="card-top"><span class="card-icon" aria-hidden="true">✓</span><span class="mono">APPROVALS</span>
+            </div>
+            <h3>Allow or deny.<br>Without switching.
+            </h3>
+            <p>See the exact command before it runs. Approve it, deny it, or send it back to the terminal.
+            </p>
+            <div class="card-image"><img src="assets/agent-approval.png" width="1520" height="692" alt="A Codex permission request to run swift test, with Deny and Allow buttons" loading="lazy">
+            </div>
+          </article>
+          <article class="feature-card files-card">
+            <div class="card-top"><span class="card-icon" aria-hidden="true">◔</span><span class="mono">USAGE</span>
+            </div>
+            <h3>Know your limits.<br>Before you hit them.
+            </h3>
+            <p>Claude and Codex session and weekly limits, plus today’s and this week’s tokens and cost.
+            </p>
+            <div class="card-image"><img src="assets/developer.png" width="1520" height="692" alt="Claude and Codex usage cards with session and weekly limits" loading="lazy">
+            </div>
+          </article>
+        </div>
+      </section>
+      <section class="developer-section wrap" id="system" aria-labelledby="system-title">
+        <div class="developer-copy"><span class="section-number">02 — YOUR MAC, AT A GLANCE</span>
+          <h2 id="system-title">CPU. Memory. GPU.<br>One hover away.
+          </h2>
+          <p>Three live rings sit on the Dev page. Click one to see the full breakdown and the apps working your Mac the hardest. No Activity Monitor required.
+          </p>
+          <ul class="feature-list">
+            <li><span aria-hidden="true">↗</span> Live CPU, memory, and GPU rings
+            </li>
+            <li><span aria-hidden="true">↗</span> The apps using the most, one click in
+            </li>
+            <li><span aria-hidden="true">↗</span> Load, swap, and GPU memory details
+            </li>
+            <li><span aria-hidden="true">↗</span> Only measures while you’re looking
+            </li>
+          </ul>
+        </div>
+        <div class="dev-art">
+          <div class="art-label"><span class="status-dot"></span> MEMORY, ONE CLICK IN
+          </div>
+          <img src="assets/stats-memory.png" alt="Memory details: a 62.5% ring with used, free, and total memory, a breakdown of app, wired, compressed, cached, and swap, and the top apps by memory" width="1520" height="808" loading="lazy">
+          <div class="art-footer"><span>See what’s using it.</span><span class="mono">CPU · MEMORY · GPU</span>
+          </div>
+        </div>
+      </section>
+      <section class="alerts wrap" aria-labelledby="alerts-title">
+        <div class="section-heading">
+          <div><span class="section-number">03 — EVEN WHEN IT’S CLOSED</span>
+            <h2 id="alerts-title">A tap on<br>the shoulder.
+            </h2>
+          </div>
+          <p>When something needs you, the closed notch stretches just enough to say so. Then it gets out of the way.
+          </p>
+        </div>
+        <div class="alerts-grid">
+          <figure class="alert-tile"><img src="assets/wing-approve.png" width="820" height="320" alt="The closed notch showing the Claude icon and an orange Approve? alert" loading="lazy">
+            <figcaption><strong>An agent needs you</strong><span class="mono">STAYS UNTIL YOU ANSWER</span>
+            </figcaption>
+          </figure>
+          <figure class="alert-tile"><img src="assets/wing-done.png" width="820" height="320" alt="The closed notch showing the Claude icon and a green Done alert" loading="lazy">
+            <figcaption><strong>A run just finished</strong><span class="mono">FIVE SECONDS, THEN GONE</span>
+            </figcaption>
+          </figure>
+          <figure class="alert-tile"><img src="assets/wing-celebrate.png" width="820" height="320" alt="The closed notch with a check, three session dots, and confetti" loading="lazy">
+            <figcaption><strong>Focus session done</strong><span class="mono">YES, THAT’S CONFETTI</span>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+      <section class="developer-section reverse wrap" id="notes" aria-labelledby="notes-title">
+        <div class="dev-art notes-art">
+          <div class="art-label"><span class="status-dot"></span> TYPE ON HOME, PRESS RETURN
+          </div>
+          <img class="quick-note-shot" src="assets/quick-note.png" alt="The quick note field on the Home page with a note being typed" width="712" height="96" loading="lazy">
+          <img src="assets/notes.png" alt="The notes panel with a list of notes on the left and the selected note open on the right" width="1520" height="528" loading="lazy">
+          <div class="art-footer"><span>Saved before you forget.</span><span class="mono">✎ QUICK NOTES</span>
+          </div>
+        </div>
+        <div class="developer-copy"><span class="section-number">04 — QUICK NOTES</span>
+          <h2 id="notes-title">Think it.<br>Type it. Return.
+          </h2>
+          <p>There’s a note field right on the Home page. Type, press Return, and it’s saved. Open the notes panel whenever you want to read, edit, or copy.
+          </p>
+          <ul class="feature-list">
+            <li><span aria-hidden="true">↗</span> Type on Home, press Return to save
+            </li>
+            <li><span aria-hidden="true">↗</span> Unsent text is kept if the notch closes
+            </li>
+            <li><span aria-hidden="true">↗</span> The first line becomes the title
+            </li>
+            <li><span aria-hidden="true">↗</span> Copy a whole note in one click
+            </li>
+          </ul>
+        </div>
+      </section>
+      <section class="everyday wrap" id="features" aria-labelledby="everyday-title">
+        <div class="section-heading">
+          <div><span class="section-number">05 — FOR EVERYTHING IN BETWEEN</span>
+            <h2 id="everyday-title">Small tools.<br>Surprisingly handy.
+            </h2>
+          </div>
+          <p>The next song. A passing thought. That file you need in a second. Give them a little space up top.
+          </p>
+        </div>
+        <div class="everyday-grid">
+          <article class="feature-card home-card">
+            <div class="card-top"><span class="card-icon" aria-hidden="true">⌂</span><span class="mono">HOME</span>
+            </div>
+            <h3>Set the mood.<br>Find your focus.
+            </h3>
+            <p>Control whatever’s playing, switch speakers, run a focus timer, flip your VPN, and jot a quick note.
+            </p>
+            <div class="card-image"><img src="assets/home.png" width="1520" height="472" alt="Home page with a playing song, a running focus timer, a VPN switch, and a quick note field" loading="lazy">
+            </div>
+          </article>
+          <article class="feature-card files-card">
+            <div class="card-top"><span class="card-icon" aria-hidden="true">▱</span><span class="mono">FILES</span>
+            </div>
+            <h3>A little shelf.<br>A smoother handoff.
+            </h3>
+            <p>Drop files on the notch, drag them out when you need them, or send them with AirDrop.
+            </p>
+            <div class="card-image"><img src="assets/files.png" width="1520" height="428" alt="Files page with five files on the shelf next to an AirDrop drop zone" loading="lazy">
+            </div>
+          </article>
+        </div>
+        <div class="everyday-grid trio">
+          <article class="feature-card">
+            <div class="card-top"><span class="card-icon" aria-hidden="true">☷</span><span class="mono">REMINDERS</span>
+            </div>
+            <h3>Check it off.<br>Up top.
+            </h3>
+            <p>Your Apple Reminders lists. Add, flag, and complete. Synced through iCloud.
+            </p>
+            <div class="card-image"><img src="assets/reminders.png" width="1520" height="620" alt="Reminders page with lists and upcoming reminders" loading="lazy">
+            </div>
+          </article>
+          <article class="feature-card">
+            <div class="card-top"><span class="card-icon" aria-hidden="true">⧉</span><span class="mono">CLIPBOARD</span>
+            </div>
+            <h3>Everything<br>you copied.
+            </h3>
+            <p>Search your history and favorite what you reuse. Passwords are never saved.
+            </p>
+            <div class="card-image clip-image"><img src="assets/clipboard.png" width="604" height="656" alt="Clipboard history popup with search, favorites, and recent items" loading="lazy">
+            </div>
+          </article>
+          <article class="feature-card">
+            <div class="card-top"><span class="card-icon" aria-hidden="true">◷</span><span class="mono">FOCUS TIMER</span>
+            </div>
+            <h3>Focus,<br>your way.
+            </h3>
+            <p>Focus, Break, Deep, or type any time. Session dots fill as you go, and finishing gets confetti.
+            </p>
+            <div class="card-image"><img src="assets/timer-column.png" width="712" height="308" alt="A running focus timer with two session dots, next to the VPN switch and quick note field" loading="lazy">
+            </div>
+          </article>
+        </div>
+        <div class="extras">
+          <p>And a few more things<br><strong>you’ll be glad are there.</strong>
+          </p>
+          <ul>
+            <li>One-click VPN
+            </li>
+            <li>Audio output switching
+            </li>
+            <li>Camera mirror
+            </li>
+            <li>Launch at login
+            </li>
+          </ul>
+        </div>
+      </section>
+      <section class="install-section" id="install" aria-labelledby="install-title">
+        <div class="wrap install-grid">
+          <div class="install-copy"><img class="install-icon" src="assets/notchlab-icon.png" alt="" width="88" height="88" loading="lazy">
+            <p class="eyebrow">A NEW HOME FOR YOUR WORKFLOW
+            </p>
+            <h2 id="install-title">Put your notch<br>to work.
+            </h2>
+            <p>Make the top of your screen your favorite shortcut. Download NotchLab and settle into your flow.
+            </p>
+            <div class="requirements"><span>Apple silicon</span><span>macOS 14+</span><span>v1.0</span>
+            </div>
+          </div>
+          <div class="install-instructions">
+            <div class="install-title-row">
+              <h3>Up and running in a minute.
+              </h3>
+              <span class="mono">HELLO, NOTCHLAB</span>
+            </div>
+            <ol class="install-steps">
+              <li>
+                <h4>Download. Drag. Done.
+                </h4>
+                <p>Open the DMG and drag NotchApp into Applications.
+                </p>
+                <a class="button download-button" href="https://github.com/HamzaLovesCoding/NotchLab/releases/download/v1.0.0/NotchLab.dmg">Download for Mac <span aria-hidden="true">↓</span></a><a class="release-link" href="https://github.com/HamzaLovesCoding/NotchLab/releases/tag/v1.0.0" target="_blank" rel="noopener noreferrer">v1.0 release notes ↗</a>
+              </li>
+              <li>
+                <h4>A quick first-launch step
+                </h4>
+                <p>NotchLab isn’t notarized yet. If macOS can’t verify it, click Done, then go to <strong>System Settings → Privacy &amp; Security → Open Anyway</strong> next to NotchApp. You only need to do this once.
+                </p>
+              </li>
+              <li>
+                <h4>Meet your new workspace
+                </h4>
+                <p>Open NotchApp and hover over your notch. Turn on Launch at Login from the gear menu so it’s always there.
+                </p>
+              </li>
+            </ol>
+            <details class="source-install">
+              <summary>Prefer to build from source?<span aria-hidden="true">+</span>
+              </summary>
+              <p>You’ll need Xcode Command Line Tools with Swift 6 or later. Install the tools with <code>xcode-select --install</code>, then run:
+              </p>
+              <div class="code-block"><button class="copy-button" type="button" aria-label="Copy install commands">Copy <span aria-hidden="true">⧉</span></button>
+                <pre><code id="install-commands">git clone https://github.com/HamzaLovesCoding/NotchLab.git
+cd NotchLab
+./build.sh --install</code></pre>
+              </div>
+              <span class="copy-status" role="status" aria-live="polite"></span>
+            </details>
+            <a class="text-link" href="https://github.com/HamzaLovesCoding/NotchLab#readme" target="_blank" rel="noopener noreferrer">View setup on GitHub <span aria-hidden="true">↗</span></a>
+          </div>
+        </div>
+      </section>
+      <section class="faq wrap" id="questions" aria-labelledby="faq-title">
+        <div>
+          <p class="eyebrow">THE LITTLE DETAILS
+          </p>
+          <h2 id="faq-title">Good questions.
+          </h2>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary>Does my Mac need a notch?<span aria-hidden="true">+</span>
+            </summary>
+            <p>No. On a display without a notch, NotchLab appears as a small pill at the top of the screen. Hover over it to open your workspace.
+            </p>
+          </details>
+          <details>
+            <summary>Which Macs can run it?<span aria-hidden="true">+</span>
+            </summary>
+            <p>The current build requires an Apple silicon Mac running macOS 14 or later. Building from source requires Xcode Command Line Tools with Swift 6 or later.
+            </p>
+          </details>
+          <details id="setup-note">
+            <summary>How do I connect Claude and Codex?<span aria-hidden="true">+</span>
+            </summary>
+            <p>NotchLab ships with a small helper called notch-hook. Add it to Claude Code’s and Codex’s hook settings using the <a href="https://github.com/HamzaLovesCoding/NotchLab#agent-questions-and-approvals" target="_blank" rel="noopener noreferrer">copy-paste setup in the README</a>, then run <code>/hooks</code> once in Codex to trust it. Usage limits work without any setup. Claude questions can be answered in the notch; Codex supports approvals and finished alerts.
+            </p>
+          </details>
+          <details>
+            <summary>What if I don’t answer in the notch?<span aria-hidden="true">+</span>
+            </summary>
+            <p>The agent waits. Click Terminal to answer there instead, or leave it and the normal terminal prompt comes back after about five minutes. If NotchLab isn’t running, your agents behave exactly as they always do.
+            </p>
+          </details>
+          <details>
+            <summary>Where does my data go?<span aria-hidden="true">+</span>
+            </summary>
+            <p>Notes, clipboard history, and your file shelf stay on your Mac, and there’s no account or analytics. The one thing NotchLab asks the internet for is your Claude usage limit, checked with Anthropic using the sign-in Claude Code already keeps on your Mac.
+            </p>
+          </details>
+          <details>
+            <summary>What permissions does it need?<span aria-hidden="true">+</span>
+            </summary>
+            <p>Camera and Reminders access are requested when you use those features. Controlling some VPN apps also needs Accessibility access. You can enable Launch at Login from the settings menu.
+            </p>
+          </details>
+        </div>
+      </section>
+    </main>
+    <footer class="wrap footer"><a class="brand" href="#"><img src="assets/notchlab-icon.png" alt="" width="36" height="36">NotchLab<span class="brand-period">.</span></a>
+      <p>A little space. A better flow.
+      </p>
+      <a href="https://github.com/HamzaLovesCoding/NotchLab" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+    </footer>
+  </body>
+</html>
