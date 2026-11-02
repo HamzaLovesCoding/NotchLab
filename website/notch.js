@@ -87,7 +87,7 @@
   const now = Date.now();
   const s = {
     open: true,
-    tab: 'dev',
+    tab: 'home',
     settings: false,
     section: 'General',
     clipOpen: false,
@@ -626,7 +626,9 @@
   function updateCaption() {
     const request = s.requests[0];
     let text;
-    if (request && s.open) text = request.kind === 'question' ? 'Claude has a question. Pick an answer and hit Send.' : 'Codex wants to run a command. Allow it, deny it, or send it back to the terminal.';
+    const onDev = s.tab === 'dev' && !s.settings && !s.clipOpen;
+    if (request && s.open && !onDev) text = `${request.kind === 'question' ? 'Claude has a question' : 'Codex needs your approval'}. Open the Dev tab to answer.`;
+    else if (request && s.open) text = request.kind === 'question' ? 'Claude has a question. Pick an answer and hit Send.' : 'Codex wants to run a command. Allow it, deny it, or send it back to the terminal.';
     else if (!s.open) text = request ? `An agent needs you. ${isTouch ? 'Tap' : 'Hover over'} the notch.` : `${isTouch ? 'Tap' : 'Hover over'} the notch to open it.`;
     else if (s.settings) text = 'Settings work here too. Hide pages, change the timer, slow down the hover.';
     else if (s.clipOpen) text = 'Click an item to copy it. Things you copy on this page show up here too.';
