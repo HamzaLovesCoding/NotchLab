@@ -16,6 +16,10 @@ A native macOS app that turns your notch into a small workspace. Hover over it t
 
 ![Developer tools: Claude and Codex usage, system stats, and agent sessions](docs/screenshots/developer.png)
 
+![Reminders: connect Apple Reminders to view and complete tasks](docs/screenshots/reminders.png)
+
+![Files: drop files onto the shelf or share them with AirDrop](docs/screenshots/files.png)
+
 ## Install
 
 Requires an **Apple silicon Mac**, **macOS 14 or later**, and **Xcode Command Line Tools with Swift 6 or later**.

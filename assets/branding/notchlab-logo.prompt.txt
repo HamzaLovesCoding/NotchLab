@@ -1,0 +1,8 @@
+Tool: built-in image_gen (transparent_background: true)
+
+Use case: logo-brand.
+Create one polished, original macOS app icon for NotchLab, a native developer workspace that expands from the MacBook notch and includes coding-agent controls, usage meters, and everyday tools.
+Design: a dark graphite rounded-square macOS icon tile, viewed straight on. Its single central emblem combines the recognizable wide, softly rounded MacBook notch silhouette with a crisp terminal prompt chevron and underscore (>_). Make the notch the distinctive visual structure, not a generic terminal window: an elegant off-white continuous contour runs horizontally, dips down into a broad rounded notch-shaped pocket, then returns to the horizontal level. The terminal prompt sits neatly inside that pocket. A restrained cool-blue cursor accent is the only color.
+Style: beautifully balanced minimal geometric logo, precise vector-like edges, confident thick strokes, strong small-size legibility, generous negative space. Subtle native macOS surface depth on the graphite tile, but the emblem is flat and sharp. The mark should occupy roughly two-thirds of the tile width. Square composition, a single large icon centered with modest even exterior padding.
+Background: actual transparency outside the rounded-square icon tile.
+No wordmark or lettering other than the terminal symbols. No laptop illustration, no laboratory flask, no circuitry, no robot, no sparkles, no gradients in the emblem, no glow, no mockup, no presentation board, no extra icons, no watermark.
