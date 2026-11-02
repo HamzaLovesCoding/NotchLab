@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>NotchApp</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.hamza.notchapp</string>
+    <key>CFBundleName</key>
+    <string>Notch</string>
+    <key>CFBundleDisplayName</key>
+    <string>Notch</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSCameraUsageDescription</key>
+    <string>The mirror shows your camera inside the notch.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>The Reminders page shows, adds and completes your Apple Reminders.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>The Reminders page shows, adds and completes your Apple Reminders.</string>
+</dict>
+</plist>
