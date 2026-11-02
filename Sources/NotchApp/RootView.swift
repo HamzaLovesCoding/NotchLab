@@ -1,4 +1,3 @@
-import ServiceManagement
 import SwiftUI
 
 /// Black notch silhouette: concave "ears" where it meets the screen edge, rounded bottom.
@@ -36,7 +35,8 @@ struct NotchRootView: View {
     var body: some View {
         let expanded = model.isExpanded
         let celebrating = model.focusTimer.celebrating
-        let agentAlert = model.agents.alert
+        // Questions and approvals always show; the "Done" flash can be turned off in Settings.
+        let agentAlert = model.agents.alert.flatMap { $0.pending || model.settings.showFinishedAlert ? $0 : nil }
         let showWings = (celebrating || agentAlert != nil) && !expanded
         let size = expanded ? model.panelSize : model.notchSize
         let wing = celebrating ? Self.celebrationWing : Self.agentWing
@@ -96,11 +96,15 @@ struct ExpandedView: View {
                 // Fixed height so the page doesn't re-layout when the clipboard popup
                 // makes the panel taller.
                 Group {
-                    switch model.tab {
-                    case .home: HomeView(model: model)
-                    case .shelf: ShelfView(model: model)
-                    case .reminders: RemindersView(store: model.reminders)
-                    case .dev: DevView(model: model)
+                    if model.showSettings {
+                        SettingsView(model: model)
+                    } else {
+                        switch model.tab {
+                        case .home: HomeView(model: model)
+                        case .shelf: ShelfView(model: model)
+                        case .reminders: RemindersView(store: model.reminders)
+                        case .dev: DevView(model: model)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -133,9 +137,10 @@ struct TopBar: View {
     var body: some View {
         HStack(spacing: 0) {
             HStack(spacing: 2) {
-                ForEach(NotchTab.allCases, id: \.self) { tab in
-                    IconButton(symbol: tab.symbol, active: model.tab == tab, help: tab.title) {
+                ForEach(model.visibleTabs, id: \.self) { tab in
+                    IconButton(symbol: tab.symbol, active: model.tab == tab && !model.showSettings, help: tab.title) {
                         model.statDetail = nil
+                        model.showSettings = false
                         model.tab = tab
                     }
                     .overlay(alignment: .topTrailing) {
@@ -147,7 +152,7 @@ struct TopBar: View {
             }
             Spacer(minLength: model.notchSize.width + 12)
             HStack(spacing: 2) {
-                if model.tab == .home {
+                if model.tab == .home, !model.showSettings, model.settings.showMirrorButton {
                     IconButton(symbol: model.mirror.isOn ? "web.camera.fill" : "web.camera",
                                active: model.mirror.isOn, help: "Mirror") {
                         model.mirror.isOn.toggle()
@@ -156,31 +161,12 @@ struct TopBar: View {
                 IconButton(symbol: "doc.on.clipboard", active: model.showClipboard, help: "Clipboard history") {
                     model.showClipboard.toggle()
                 }
-                SettingsMenu()
+                IconButton(symbol: "gearshape.fill", active: model.showSettings, help: "Settings") {
+                    model.showSettings.toggle()
+                }
             }
         }
         .padding(.horizontal, 18)
-    }
-}
-
-struct SettingsMenu: View {
-    var body: some View {
-        IconButton(symbol: "gearshape.fill", help: "Settings") {
-            let launchAtLogin = SMAppService.mainApp.status == .enabled
-            popUpMenu([
-                ActionMenuItem("Launch at Login", checked: launchAtLogin) { setLaunchAtLogin(!launchAtLogin) },
-                .separator(),
-                ActionMenuItem("Quit Notch") { NSApp.terminate(nil) },
-            ])
-        }
-    }
-
-    private func setLaunchAtLogin(_ enabled: Bool) {
-        do {
-            if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-        } catch {
-            NSLog("Launch at login change failed: \(error.localizedDescription)")
-        }
     }
 }
 

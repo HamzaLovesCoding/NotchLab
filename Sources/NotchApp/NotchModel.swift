@@ -1,7 +1,7 @@
 import AppKit
 import Observation
 
-enum NotchTab: CaseIterable {
+enum NotchTab: String, CaseIterable {
     case home, shelf, reminders, dev
 
     var title: String {
@@ -33,6 +33,7 @@ final class NotchModel {
     var tab: NotchTab = .home
     var statDetail: StatKind?
     var showClipboard = false
+    var showSettings = false
     var notchSize = CGSize(width: 200, height: 32)
 
     /// Highlighted drop zone while a file drag hovers the panel.
@@ -42,11 +43,12 @@ final class NotchModel {
 
     let nowPlaying = NowPlaying()
     let audioOutputs = AudioOutputs()
-    let focusTimer = FocusTimer()
+    let settings: AppSettings
+    let focusTimer: FocusTimer
     let mirror = Mirror()
     let notes = NotesStore()
     let vpn = VPNController()
-    let clipboard = ClipboardHistory()
+    let clipboard: ClipboardHistory
     let shelf = Shelf()
     let reminders = RemindersStore()
     let usage = UsageStore()
@@ -54,6 +56,11 @@ final class NotchModel {
     let agents = AgentMonitor()
 
     init() {
+        let settings = AppSettings()
+        self.settings = settings
+        focusTimer = FocusTimer(settings: settings)
+        clipboard = ClipboardHistory(settings: settings)
+        tab = settings.startTab ?? .home
         // The next hover should land on the request, so switch pages while the notch is closed.
         agents.onRequest = { [weak self] in
             guard let self, !self.isExpanded else { return }
@@ -67,9 +74,26 @@ final class NotchModel {
     static let pagePadding: CGFloat = 20
     private static let clipboardArea: CGFloat = 330
 
+    /// Tabs shown in the top bar. Dev comes back while an agent waits, so a request is never stranded.
+    var visibleTabs: [NotchTab] {
+        NotchTab.allCases.filter { !settings.hiddenTabs.contains($0) || ($0 == .dev && !agents.requests.isEmpty) }
+    }
+
+    func setTab(_ tab: NotchTab, hidden: Bool) {
+        guard tab != .home else { return }
+        if hidden {
+            settings.hiddenTabs.insert(tab)
+            if settings.startTab == tab { settings.startTab = nil }
+            if self.tab == tab { self.tab = .home }
+        } else {
+            settings.hiddenTabs.remove(tab)
+        }
+    }
+
     /// Height below the tab bar that the current page needs.
     var pageArea: CGFloat {
-        switch tab {
+        if showSettings { return 260 }
+        return switch tab {
         case .home: notes.isOpen ? 190 : 162
         case .shelf: 140
         case .reminders: 236
@@ -88,6 +112,7 @@ final class NotchModel {
     /// Esc steps back one level before closing the notch. Returns false when nothing was open.
     func dismissOverlay() -> Bool {
         if showClipboard { showClipboard = false; return true }
+        if showSettings { showSettings = false; return true }
         if notes.isOpen { notes.close(); return true }
         if statDetail != nil { statDetail = nil; return true }
         return false
@@ -95,6 +120,7 @@ final class NotchModel {
 
     func resetOverlays() {
         showClipboard = false
+        showSettings = false
         statDetail = nil
         notes.close()
     }

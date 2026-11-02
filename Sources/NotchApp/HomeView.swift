@@ -262,7 +262,7 @@ struct TimerCard: View {
                 .background(Capsule().fill(selected ? preset.color.opacity(0.22) : .white.opacity(0.06)))
         }
         .buttonStyle(.plain)
-        .help("\(preset.name) · \(preset.minutes) min")
+        .help("\(preset.name) · \(timer.minutes(for: preset)) min")
     }
 
     private func roundButton(_ symbol: String, label: String, fill: Color, action: @escaping () -> Void) -> some View {

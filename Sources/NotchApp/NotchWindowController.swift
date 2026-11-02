@@ -22,9 +22,6 @@ final class NotchWindowController {
     private var dragPasteboardCount = NSPasteboard(name: .drag).changeCount
     private var fileDragActive = false
 
-    private static let hoverDelay: TimeInterval = 0.1
-    private static let collapseDelay: TimeInterval = 0.15
-
     init() {
         let hosting = NotchHostingView(rootView: NotchRootView(model: model))
         hosting.sizingOptions = []
@@ -152,7 +149,7 @@ final class NotchWindowController {
             let inside = expandedRect.contains(point)
             setInteractive(inside)
             // A file dragged onto an open notch goes to the shelf, not into the note editor.
-            if inside, fileDragActive, model.tab != .shelf { model.tab = .shelf }
+            if inside, fileDragActive, filesEnabled, model.tab != .shelf { model.tab = .shelf }
             if inside {
                 collapseWork?.cancel()
                 collapseWork = nil
@@ -166,7 +163,7 @@ final class NotchWindowController {
         // Recover if a drag ended without us seeing the mouse-up (e.g. cancelled with Esc).
         if fileDragActive, !buttonDown { endFileDrag() }
         if fileDragActive {
-            if dragRect.contains(point) { expand(to: .shelf) }
+            if dragRect.contains(point), filesEnabled { expand(to: .shelf) }
             return
         }
         if hoverRect.contains(point), !buttonDown {
@@ -177,7 +174,7 @@ final class NotchWindowController {
                 if self.hoverRect.contains(self.mouseLocation()) { self.expand() }
             }
             hoverWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.hoverDelay, execute: work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + model.settings.openDelay, execute: work)
         } else {
             hoverWork?.cancel()
             hoverWork = nil
@@ -192,8 +189,11 @@ final class NotchWindowController {
             if !self.expandedRect.contains(self.mouseLocation()), !self.isEditingText { self.collapse() }
         }
         collapseWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.collapseDelay, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + model.settings.closeDelay, execute: work)
     }
+
+    /// With the Files page hidden in Settings, dragged files don't open the notch.
+    private var filesEnabled: Bool { model.visibleTabs.contains(.shelf) }
 
     /// Typing keeps the notch open even if the pointer drifts away. Only while a text field
     /// is focused, not merely while the panel holds focus after editing ended.
@@ -217,6 +217,9 @@ final class NotchWindowController {
         guard model.isExpanded else { return }
         model.isExpanded = false
         model.resetOverlays()
+        if let start = model.settings.startTab { model.tab = start }
+        // Dev stays visible only while an agent waits; once that's answered, don't reopen to a hidden page.
+        if !model.visibleTabs.contains(model.tab) { model.tab = .home }
         model.dropTarget = nil
         setInteractive(false)
         if panel.isKeyWindow {
@@ -243,6 +246,7 @@ final class NotchWindowController {
     }
 
     func dragUpdated(_ info: NSDraggingInfo) -> NSDragOperation {
+        guard filesEnabled else { return [] }
         // Dragging a shelf item out passes over our own window; only AirDrop accepts it.
         let isInternal = info.draggingSource != nil
         let target = dropTarget(for: info)

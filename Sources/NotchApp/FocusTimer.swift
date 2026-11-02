@@ -4,6 +4,7 @@ import SwiftUI
 
 struct TimerPreset: Identifiable, Equatable {
     let name: String
+    /// Length until the user picks another in Settings.
     let minutes: Int
     let color: Color
     var id: String { name }
@@ -34,8 +35,10 @@ final class FocusTimer {
     private var sessionDay: Date
     private var sessionCount: Int
     @ObservationIgnored private var completion: Timer?
+    @ObservationIgnored private let settings: AppSettings
 
-    init() {
+    init(settings: AppSettings) {
+        self.settings = settings
         let defaults = UserDefaults.standard
         let saved = defaults.double(forKey: "timerDuration")
         duration = saved > 0 ? saved : 25 * 60
@@ -82,7 +85,15 @@ final class FocusTimer {
 
     func select(_ preset: TimerPreset) {
         self.preset = preset
-        setDuration(TimeInterval(preset.minutes * 60), keepPreset: true)
+        setDuration(TimeInterval(minutes(for: preset) * 60), keepPreset: true)
+    }
+
+    func minutes(for preset: TimerPreset) -> Int { settings.timerMinutes[preset.name] ?? preset.minutes }
+
+    /// Saves a new preset length, and applies it now if that preset is selected and not counting down.
+    func setMinutes(_ minutes: Int, for preset: TimerPreset) {
+        settings.timerMinutes[preset.name] = minutes
+        if self.preset == preset, isIdle { select(preset) }
     }
 
     /// A typed-in time. Ignored if it adds up to zero.
@@ -108,7 +119,8 @@ final class FocusTimer {
         }
         // Pomodoro rhythm: Focus queues up a Break and a Break queues Focus. Other times repeat.
         if preset?.name == "Focus" { select(Self.presets[1]) } else if lastFinishedWasBreak { select(Self.presets[0]) }
-        NSSound(named: "Hero")?.play()
+        if !settings.timerSound.isEmpty { NSSound(named: settings.timerSound)?.play() }
+        guard settings.timerCelebration else { return }
         celebrating = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in self?.celebrating = false }
     }
