@@ -551,7 +551,7 @@
       <div class="nl-sidebar">${SECTIONS.map(([name, ic]) => `
         <button type="button" class="${s.section === name ? 'active' : ''}" data-act="section" data-arg="${name}">${icon(ic)}${name}</button>`).join('')}
         <button class="quit" type="button" data-act="quit">${icon('power')}Quit NotchLab</button>
-        <small>Version 1.0</small>
+        <small>Version 1.1</small>
       </div>
       <div class="nl-card nl-prefs">${sections[s.section]()}</div>
     </div>`;
