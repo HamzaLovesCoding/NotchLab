@@ -1,5 +1,6 @@
 #!/bin/bash
-# Builds build/NotchApp.app. Pass --install to copy it to /Applications and launch it.
+# Builds build/NotchApp.app. Pass --install to copy it to /Applications and launch it,
+# or --dmg to also make build/NotchLab.dmg for sharing.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -38,6 +39,16 @@ codesign --force --sign "$IDENTITY" "$APP/Contents/MacOS/notch-hook"
 codesign --force --sign "$IDENTITY" "$APP"
 echo "Signed with: $IDENTITY"
 echo "Built $APP"
+
+# Drag-to-Applications disk image for downloads: build/NotchLab.dmg
+if [[ "${1:-}" == "--dmg" ]]; then
+    STAGE="$(mktemp -d)"
+    cp -R "$APP" "$STAGE/"
+    ln -s /Applications "$STAGE/Applications"
+    hdiutil create -volname NotchLab -srcfolder "$STAGE" -ov -format UDZO build/NotchLab.dmg >/dev/null
+    rm -rf "$STAGE"
+    echo "Created build/NotchLab.dmg"
+fi
 
 if [[ "${1:-}" == "--install" ]]; then
     DEST=/Applications/NotchApp.app
