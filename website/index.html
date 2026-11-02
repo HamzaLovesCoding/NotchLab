@@ -11,7 +11,9 @@
     <title>NotchLab — Your workflow. One notch away.</title>
     <link rel="icon" type="image/png" href="assets/notchlab-icon.png">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="notch.css">
     <script src="script.js" defer></script>
+    <script src="notch.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -33,12 +35,12 @@
         <p class="compatibility">v1.0 <span>·</span> macOS 14+ <span>·</span> Apple silicon <span>·</span> Free
         </p>
         <div class="product-showcase" id="explore">
-          <div class="showcase-heading"><span class="mono">01 / MEET YOUR NEW TOP BAR</span><span class="preview-hint">Four spaces. One hover.</span>
+          <div class="showcase-heading"><span class="mono">01 / MEET YOUR NEW TOP BAR</span><span class="preview-hint">Go ahead, it works.</span>
           </div>
           <div class="desktop">
             <div class="desktop-menubar" aria-hidden="true"><span class="desktop-app">◈ &nbsp; NotchLab <span>File &nbsp; Edit</span></span><span class="desktop-clock">Made for your Mac <span>⌘</span></span>
             </div>
-            <div class="preview-content" id="preview-panel" role="tabpanel" aria-labelledby="tab-dev" tabindex="0"><div class="camera-notch" aria-hidden="true"><span></span></div><img id="preview-image" src="assets/notch-developer.png" width="1520" height="692" alt="NotchLab Dev page with Claude and Codex usage limits, CPU, memory, and GPU rings, and recent agent sessions" fetchpriority="high">
+            <div class="preview-content"><div class="camera-notch" aria-hidden="true"><span></span></div><div class="notch-stage"><img class="notch-fallback" src="assets/notch-developer.png" width="1520" height="692" alt="NotchLab Dev page with Claude and Codex usage limits, CPU, memory, and GPU rings, and recent agent sessions" fetchpriority="high"></div>
             </div>
             <div class="desktop-bottom"><span class="tiny-cross" aria-hidden="true">+</span>
               <p id="preview-caption" aria-live="polite">Your limits, your Mac, and every agent session. One glance.
@@ -46,13 +48,7 @@
               <span class="tiny-cross" aria-hidden="true">+</span>
             </div>
           </div>
-          <div class="preview-controls" role="tablist" aria-label="Explore NotchLab pages">
-            <button id="tab-dev" role="tab" aria-selected="true" aria-controls="preview-panel" data-view="developer"><span aria-hidden="true">&gt;_</span> Dev</button>
-            <button id="tab-home" role="tab" aria-selected="false" aria-controls="preview-panel" tabindex="-1" data-view="home"><span aria-hidden="true">⌂</span> Home</button>
-            <button id="tab-files" role="tab" aria-selected="false" aria-controls="preview-panel" tabindex="-1" data-view="files"><span aria-hidden="true">▱</span> Files</button>
-            <button id="tab-reminders" role="tab" aria-selected="false" aria-controls="preview-panel" tabindex="-1" data-view="reminders"><span aria-hidden="true">☷</span> Reminders</button>
-          </div>
-          <p class="preview-note">The real interface, with demo data.
+          <p class="preview-note">A working copy of the real interface with demo data. Nothing you type or drop leaves your browser.
           </p>
         </div>
       </section>
@@ -310,7 +306,7 @@
               <li>
                 <h4>Meet your new workspace
                 </h4>
-                <p>Open NotchApp and hover over your notch. Turn on Launch at Login from the gear menu so it’s always there.
+                <p>Open NotchApp and hover over your notch. Turn on Launch at Login in Settings (the gear) so it’s always there.
                 </p>
               </li>
             </ol>
@@ -353,7 +349,7 @@ cd NotchLab
           <details id="setup-note">
             <summary>How do I connect Claude and Codex?<span aria-hidden="true">+</span>
             </summary>
-            <p>NotchLab ships with a small helper called notch-hook. Add it to Claude Code’s and Codex’s hook settings using the <a href="https://github.com/HamzaLovesCoding/NotchLab#agent-questions-and-approvals" target="_blank" rel="noopener noreferrer">copy-paste setup in the README</a>, then run <code>/hooks</code> once in Codex to trust it. Usage limits work without any setup. Claude questions can be answered in the notch; Codex supports approvals and finished alerts.
+            <p>Open the Dev page and click Connect Claude and Connect Codex. NotchLab adds its small notch-hook helper to each agent’s hook settings and leaves the rest of the file alone. Then run <code>/hooks</code> once in Codex to trust it, and restart any sessions that were already open. Prefer to do it by hand? There’s a <a href="https://github.com/HamzaLovesCoding/NotchLab#agent-questions-and-approvals" target="_blank" rel="noopener noreferrer">manual setup in the README</a>. Usage limits work without any setup. Claude questions can be answered in the notch; Codex supports approvals and finished alerts.
             </p>
           </details>
           <details>
@@ -371,7 +367,7 @@ cd NotchLab
           <details>
             <summary>What permissions does it need?<span aria-hidden="true">+</span>
             </summary>
-            <p>Camera and Reminders access are requested when you use those features. Controlling some VPN apps also needs Accessibility access. You can enable Launch at Login from the settings menu.
+            <p>Camera and Reminders access are requested when you use those features. Controlling some VPN apps also needs Accessibility access. You can turn on Launch at Login in Settings.
             </p>
           </details>
         </div>

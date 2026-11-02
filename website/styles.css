@@ -376,43 +376,10 @@ h1>span {
   color:#65685f;
 }
 
-.preview-controls {
-  display:inline-flex;
-  align-items:center;
-  gap:5px;
-  border:1px solid var(--line);
-  border-radius:10px;
-  padding:5px;
-  background:#eeeee8;
-  margin:22px auto 0;
-}
 
-.preview-controls button {
-  display:flex;
-  align-items:center;
-  gap:9px;
-  background:none;
-  border:0;
-  color:#666861;
-  border-radius:6px;
-  padding:12px 21px;
-  font-size:12px;
-  transition:background .2s,color .2s,box-shadow .2s;
-}
 
-.preview-controls button>span {
-  font:17px/1 var(--mono);
-}
 
-.preview-controls button[aria-selected=true] {
-  background:white;
-  color:var(--ink);
-  box-shadow:0 1px 4px #00000012;
-}
 
-.preview-controls button:hover {
-  color:var(--blue);
-}
 
 .preview-note {
   font:10px/1.5 var(--mono);
@@ -1141,22 +1108,6 @@ details a {
   }
   .tiny-cross {
     font-size:13px;
-  }
-  .preview-controls {
-    display:flex;
-    gap:3px;
-    padding:4px;
-    margin-top:18px;
-  }
-  .preview-controls button {
-    padding:10px 5px;
-    justify-content:center;
-    flex:1;
-    gap:5px;
-    font-size:10px;
-  }
-  .preview-controls button>span {
-    font-size:14px;
   }
   .preview-note {
     font-size:8px;
