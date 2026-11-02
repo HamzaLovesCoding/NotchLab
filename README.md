@@ -22,17 +22,21 @@ A native macOS app that turns your notch into a small workspace. Hover over it t
 
 ![Files: drop files onto the shelf or share them with AirDrop](docs/screenshots/files.png)
 
-## Install
+## Download
 
-Requires an **Apple silicon Mac**, **macOS 14 or later**, and **Xcode Command Line Tools with Swift 6 or later**.
+Requires an **Apple silicon Mac** and **macOS 14 or later**.
 
-Install the command line tools if needed:
+1. Download `NotchLab.dmg` from the [latest release](https://github.com/HamzaLovesCoding/NotchLab/releases/latest).
+2. Open it and drag **NotchApp** into **Applications**.
+3. Open NotchApp from Applications. NotchLab isn't notarized by Apple yet, so the first time macOS says it can't verify the app. Click **Done**, open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to NotchApp. You only have to do this once.
 
-```sh
-xcode-select --install
-```
+   Or skip the prompt from Terminal: `xattr -dr com.apple.quarantine /Applications/NotchApp.app`
 
-Then build and install:
+Hover over the notch to get started. You can turn on **Launch at Login** from the settings menu. Allow Camera and Reminders access when you use those features; controlling some VPN apps also requires Accessibility access.
+
+## Build from source
+
+Requires **Xcode Command Line Tools with Swift 6 or later** (`xcode-select --install`).
 
 ```sh
 git clone https://github.com/HamzaLovesCoding/NotchLab.git
@@ -40,9 +44,7 @@ cd NotchLab
 ./build.sh --install
 ```
 
-The script installs and opens `/Applications/NotchApp.app`. Hover over the notch to get started. You can enable **Launch at Login** from the settings menu.
-
-Allow Camera and Reminders access when using those features. Controlling some VPN apps also requires Accessibility access.
+This builds, installs, and opens `/Applications/NotchApp.app`. Use `./build.sh --dmg` to make `build/NotchLab.dmg` for sharing.
 
 ## Agent questions and approvals
 
