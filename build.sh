@@ -14,6 +14,16 @@ cp "$BIN_DIR/NotchApp" "$APP/Contents/MacOS/NotchApp"
 cp "$BIN_DIR/NotchHook" "$APP/Contents/MacOS/notch-hook"
 cp Support/Info.plist "$APP/Contents/Info.plist"
 
+# App icon: the logo redrawn on the macOS icon grid (so Tahoe doesn't box it), converted with built-in tools.
+ICONSET="$(mktemp -d)/AppIcon.iconset"
+mkdir -p "$ICONSET"
+for size in 16 32 128 256 512; do
+    sips -z $size $size assets/branding/notchlab-icon.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+    sips -z $((size * 2)) $((size * 2)) assets/branding/notchlab-icon.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+rm -rf "$(dirname "$ICONSET")"
+
 # /usr/bin/perl runs as arm64e, so the bridge needs an arm64e slice.
 clang -dynamiclib -fobjc-arc -O2 -arch arm64 -arch arm64e -mmacosx-version-min=14.0 \
     -framework Foundation Bridge/MediaRemoteBridge.m \

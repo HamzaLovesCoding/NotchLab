@@ -12,6 +12,8 @@
     <string>Notch</string>
     <key>CFBundleDisplayName</key>
     <string>Notch</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
