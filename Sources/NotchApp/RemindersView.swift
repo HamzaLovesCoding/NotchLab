@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RemindersView: View {
     let store: RemindersStore
+    @Environment(\.accent) private var accent
 
     var body: some View {
         Group {
@@ -81,12 +82,12 @@ struct RemindersView: View {
             Text("See and check off your Apple Reminders here")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.6))
-            Button(action: store.requestAccess) {
+            Button { store.requestAccess() } label: {
                 Text("Connect Reminders")
                     .font(.system(size: 12, weight: .semibold))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(Color(red: 0.27, green: 0.58, blue: 1)))
+                    .background(Capsule().fill(accent ?? .notchBlue))
             }
             .buttonStyle(PressableStyle())
         }
@@ -108,7 +109,7 @@ struct RemindersView: View {
             }
             .buttonStyle(.plain)
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(Color(red: 0.27, green: 0.58, blue: 1))
+            .foregroundStyle(accent ?? .notchBlue)
         }
         .frame(maxWidth: 360)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -215,12 +216,13 @@ private struct ReminderRow: View {
 private struct NewReminderField: View {
     let store: RemindersStore
     @State private var text = ""
+    @Environment(\.accent) private var accent
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "plus.circle.fill")
                 .font(.system(size: 15))
-                .foregroundStyle(store.selectedList?.color ?? Color(red: 0.27, green: 0.58, blue: 1))
+                .foregroundStyle(store.selectedList?.color ?? accent ?? .notchBlue)
             TextField("New reminder", text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))

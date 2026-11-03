@@ -74,7 +74,9 @@ final class RemindersStore {
 
     func list(for item: ReminderItem) -> ReminderList? { lists.first { $0.id == item.listID } }
 
-    func requestAccess() {
+    /// Returns the request so Connect all can wait for the answer before the next prompt.
+    @discardableResult
+    func requestAccess() -> Task<Void, Never> {
         Task {
             do {
                 let granted = try await store.requestFullAccessToReminders()

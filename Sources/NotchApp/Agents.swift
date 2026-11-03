@@ -78,8 +78,14 @@ final class AgentMonitor {
     private(set) var justFinished: AgentSession?
     @ObservationIgnored var onRequest: (() -> Void)?
     @ObservationIgnored private var server: AgentSocketServer?
+    @ObservationIgnored private let settings: AppSettings
+    @ObservationIgnored private var awayTimer: Timer?
 
     static let socketPath = NSHomeDirectory() + "/Library/Application Support/NotchApp/agent.sock"
+
+    init(settings: AppSettings) {
+        self.settings = settings
+    }
 
     func start() {
         guard server == nil else { return }
@@ -88,6 +94,9 @@ final class AgentMonitor {
         server = AgentSocketServer(path: Self.socketPath,
                                    onMessage: { [weak self] data, fd in self?.handle(data, from: fd) ?? false },
                                    onClose: { [weak self] fd in self?.requests.removeAll { $0.connection == fd } })
+        awayTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.handBackIfAway() }
+        }
     }
 
     var alert: AgentAlert? {
@@ -136,6 +145,31 @@ final class AgentMonitor {
         sessions.removeAll { $0.id == session.id }
     }
 
+    /// In Auto, a request still waiting when you step away goes back to the agent's own
+    /// prompt, so it shows up in the terminal and in Claude's Remote Control.
+    private func handBackIfAway() {
+        guard settings.promptRouting == .auto, !requests.isEmpty, Self.userIsAway else { return }
+        let pending = requests
+        pending.forEach { respond($0, nil) }
+    }
+
+    /// A question shown in the notch never reaches the terminal, so only take it while you're likely to see it.
+    private var asksInNotch: Bool {
+        switch settings.promptRouting {
+        case .notch: true
+        case .terminal: false
+        case .auto: !Self.userIsAway
+        }
+    }
+
+    /// No keyboard or pointer input for two minutes, or the screen is locked.
+    private static var userIsAway: Bool {
+        if let anyInput = CGEventType(rawValue: ~0),
+           CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput) >= 120 { return true }
+        let session = CGSessionCopyCurrentDictionary() as? [String: Any]
+        return session?["CGSSessionScreenIsLocked"] as? Bool ?? false
+    }
+
     private func respond(_ request: AgentRequest, _ object: [String: Any]?) {
         var data = object.flatMap { try? JSONSerialization.data(withJSONObject: $0) } ?? Data()
         data.append(UInt8(ascii: "\n"))
@@ -165,11 +199,13 @@ final class AgentMonitor {
 
         switch event {
         case "PermissionRequest":
+            guard asksInNotch else { return false }
             let (summary, detail) = Self.describe(tool: tool, input: input)
             add(AgentRequest(agent: agent, sessionKey: key, project: project, app: app,
                              kind: .permission(tool: tool, summary: summary, detail: detail), connection: fd, toolInput: [:]))
             return true
         case "PreToolUse" where tool == "AskUserQuestion":
+            guard asksInNotch else { return false }
             let questions = Self.parseQuestions(input["questions"])
             guard !questions.isEmpty else { return false }
             add(AgentRequest(agent: agent, sessionKey: key, project: project, app: app,

@@ -7,17 +7,35 @@ struct HomeView: View {
         if model.notes.isOpen {
             NotesPanel(store: model.notes)
         } else {
+            let column = model.settings.visibleColumnCards
+            let showMusic = !model.settings.hiddenHomeCards.contains(.music)
             HStack(spacing: 14) {
-                MusicPlayerView(player: model.nowPlaying, outputs: model.audioOutputs)
-                    .frame(width: 286)
+                if showMusic {
+                    let player = MusicPlayerView(player: model.nowPlaying, outputs: model.audioOutputs)
+                    if column.isEmpty {
+                        player.frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        player.frame(width: 286)
+                    }
+                }
                 // Fills the mirror's space while the mirror is off.
-                VStack(spacing: 6) {
-                    TimerCard(timer: model.focusTimer)
-                        .frame(height: 58)
-                    VPNRow(vpn: model.vpn)
-                        .frame(height: 36)
-                    NoteRow(store: model.notes)
-                        .frame(height: 36)
+                if !column.isEmpty {
+                    VStack(spacing: 6) {
+                        ForEach(column, id: \.self) { card in
+                            switch card {
+                            case .timer: TimerCard(timer: model.focusTimer).frame(height: 58)
+                            case .vpn: VPNRow(vpn: model.vpn).frame(height: 36)
+                            case .note: NoteRow(store: model.notes).frame(height: 36)
+                            case .music: EmptyView()
+                            }
+                        }
+                    }
+                }
+                if !showMusic, column.isEmpty, !model.mirror.isOn {
+                    Text("Every Home card is off. Turn some on in Settings › Home.")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .frame(maxWidth: .infinity)
                 }
                 if model.mirror.isOn {
                     MirrorTile(mirror: model.mirror)
@@ -62,7 +80,9 @@ struct MusicPlayerView: View {
     }
 
     private var subtitle: String {
-        guard player.hasContent else { return player.bridgeFailed ? "Media info unavailable" : "Play music or a video" }
+        guard player.hasContent else {
+            return player.status ?? (player.bridgeFailed ? "Media info unavailable" : "Play music or a video")
+        }
         return player.artist.isEmpty ? player.appName : player.artist
     }
 
@@ -520,11 +540,12 @@ struct SwitchView: View {
     let isOn: Bool
     var enabled = true
     let action: () -> Void
+    @Environment(\.accent) private var accent
 
     var body: some View {
         Button(action: action) {
             Capsule()
-                .fill(isOn ? Color.green : .white.opacity(0.18))
+                .fill(isOn ? accent ?? .green : .white.opacity(0.18))
                 .frame(width: 30, height: 18)
                 .overlay(alignment: isOn ? .trailing : .leading) {
                     Circle().fill(.white).padding(2).shadow(color: .black.opacity(0.2), radius: 1, y: 1)
@@ -559,8 +580,13 @@ struct MirrorTile: View {
                 ProgressView().controlSize(.small)
             }
         }
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .onTapGesture { mirror.isOn = false }
+        .help("Click to turn off the camera")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Mirror")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Turns off the camera")
         // Only on screen while the mirror is on, so the camera follows the tile.
         .onAppear { mirror.start() }
         .onDisappear { mirror.stop() }

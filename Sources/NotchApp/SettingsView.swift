@@ -1,18 +1,26 @@
+import AVFoundation
+import EventKit
 import ServiceManagement
 import SwiftUI
 
 private enum SettingsSection: String, CaseIterable {
+    case connections = "Connections"
     case general = "General"
-    case agents = "Agents"
+    case appearance = "Appearance"
+    case home = "Home"
     case pages = "Pages"
+    case agents = "Agents"
     case timer = "Focus Timer"
     case clipboard = "Clipboard & Files"
 
     var symbol: String {
         switch self {
+        case .connections: "link"
         case .general: "gearshape.fill"
-        case .agents: "sparkles"
+        case .appearance: "paintpalette.fill"
+        case .home: "house.fill"
         case .pages: "square.grid.2x2.fill"
+        case .agents: "sparkles"
         case .timer: "timer"
         case .clipboard: "doc.on.clipboard.fill"
         }
@@ -22,7 +30,7 @@ private enum SettingsSection: String, CaseIterable {
 /// Opened from the gear in the top bar; takes the place of the current page.
 struct SettingsView: View {
     let model: NotchModel
-    @State private var section = SettingsSection.general
+    @State private var section = SettingsSection.connections
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -41,15 +49,21 @@ struct SettingsView: View {
             .frame(width: 164)
 
             Card(padding: 12) {
-                VStack(alignment: .leading, spacing: 0) {
-                    switch section {
-                    case .general: GeneralSettings(model: model)
-                    case .agents: AgentSettings(settings: model.settings)
-                    case .pages: PageSettings(model: model)
-                    case .timer: TimerSettings(timer: model.focusTimer, settings: model.settings)
-                    case .clipboard: ClipboardSettings(model: model)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        switch section {
+                        case .connections: ConnectionSettings(model: model)
+                        case .general: GeneralSettings(settings: model.settings, tabs: model.visibleTabs)
+                        case .appearance: AppearanceSettings(settings: model.settings)
+                        case .home: HomeSettings(model: model)
+                        case .pages: PageSettings(model: model)
+                        case .agents: AgentSettings(settings: model.settings)
+                        case .timer: TimerSettings(timer: model.focusTimer, settings: model.settings)
+                        case .clipboard: ClipboardSettings(model: model)
+                        }
                     }
                 }
+                .scrollIndicators(.automatic)
             }
         }
     }
@@ -57,26 +71,177 @@ struct SettingsView: View {
 
 // MARK: Sections
 
-private struct GeneralSettings: View {
+/// Everything NotchLab can hook into or needs permission for, in one place.
+private struct ConnectionSettings: View {
     let model: NotchModel
+    @State private var agents: Set<AgentKind> = []
+    @State private var camera = AVCaptureDevice.authorizationStatus(for: .video)
+    @State private var reminders = EKEventStore.authorizationStatus(for: .reminder)
+    @State private var accessibility = AXIsProcessTrusted()
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var connecting = false
 
     var body: some View {
-        let settings = model.settings
-        SettingRow(title: "Launch at login", detail: "Open NotchLab when you log in") {
-            SwitchView(isOn: launchAtLogin) {
-                do {
-                    if launchAtLogin { try SMAppService.mainApp.unregister() } else { try SMAppService.mainApp.register() }
-                } catch {
-                    NSLog("Launch at login change failed: \(error.localizedDescription)")
-                }
-                launchAtLogin = SMAppService.mainApp.status == .enabled
+        let claude = model.usage.claude
+        let signedIn = claude.note != ClaudeLimits.signedOutNote
+        let done = [agents.contains(.claude), agents.contains(.codex), camera == .authorized,
+                    reminders == .fullAccess, accessibility, launchAtLogin]
+        let allDone = !done.contains(false)
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.showWelcome ? "Welcome to NotchLab" : "Connections")
+                    .font(.system(size: 13, weight: .bold))
+                Text(model.showWelcome ? "Connect what you'd like to use. You can change it here anytime."
+                                       : "\(done.filter { $0 }.count) of \(done.count) connected")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            PillButton(title: allDone ? "All connected" : (connecting ? "Connecting…" : "Connect all"), action: connectAll)
+                .disabled(allDone || connecting)
+        }
+        .frame(height: 44)
+        RowDivider()
+        agentRow(.claude, title: "Claude Code", detail: "Questions and approvals in the notch")
+        RowDivider()
+        agentRow(.codex, title: "Codex", detail: "Run /hooks in Codex once to trust it")
+        RowDivider()
+        SettingRow(title: "Claude usage", detail: signedIn ? "Session and weekly limits on the Dev page"
+                                                            : "Run claude in Terminal and sign in", symbol: "chart.bar.fill") {
+            if !claude.loaded {
+                ProgressView().controlSize(.small)
+            } else if signedIn {
+                StatusBadge(title: "Connected")
+            } else {
+                PillButton(title: "Check again", action: model.usage.refresh)
             }
         }
         RowDivider()
-        SettingRow(title: "Open after hovering", detail: "How long to rest on the notch") {
-            Choice(options: [("Instant", 0.1), ("Short", 0.3), ("Long", 0.6)],
-                   selection: settings.openDelay) { settings.openDelay = $0 }
+        permissionRow("Camera", detail: "For the mirror on Home", symbol: "web.camera.fill",
+                      granted: camera == .authorized, undecided: camera == .notDetermined, pane: "Privacy_Camera") {
+            Task {
+                _ = await AVCaptureDevice.requestAccess(for: .video)
+                refresh()
+            }
+        }
+        RowDivider()
+        permissionRow("Reminders", detail: "For the Reminders page", symbol: "checklist",
+                      granted: reminders == .fullAccess, undecided: reminders == .notDetermined, pane: "Privacy_Reminders") {
+            Task {
+                await model.reminders.requestAccess().value
+                refresh()
+            }
+        }
+        RowDivider()
+        // macOS only offers the prompt; once dismissed, the switch lives in System Settings.
+        permissionRow("VPN control", detail: "Lets the VPN switch work apps like ProtonVPN", symbol: "lock.shield.fill",
+                      granted: accessibility, undecided: true, pane: "Privacy_Accessibility",
+                      request: model.vpn.requestAppControlPermission)
+        RowDivider()
+        SettingRow(title: "Launch at login", detail: "Open NotchLab when you log in", symbol: "power") {
+            SwitchView(isOn: launchAtLogin) { setLaunchAtLogin(!launchAtLogin) }
+        }
+        if model.showWelcome {
+            HStack {
+                Spacer()
+                PillButton(title: "Done") { model.showSettings = false; model.showWelcome = false }
+            }
+            .padding(.top, 8)
+        }
+        Color.clear.frame(height: 0)
+            .onAppear { model.usage.refreshIfStale() }
+            // Permissions can change in System Settings while this page is open.
+            .task {
+                while !Task.isCancelled {
+                    refresh()
+                    try? await Task.sleep(for: .seconds(1))
+                }
+            }
+    }
+
+    private func agentRow(_ agent: AgentKind, title: String, detail: String) -> some View {
+        let isConnected = agents.contains(agent)
+        return SettingRow(title: title, detail: isConnected ? detail : "Not connected", icon: agent) {
+            SwitchView(isOn: isConnected) {
+                setAgentHooks(agent, connected: !isConnected)
+                refresh()
+            }
+        }
+    }
+
+    private func permissionRow(_ title: String, detail: String, symbol: String, granted: Bool, undecided: Bool,
+                               pane: String, request: @escaping () -> Void) -> some View {
+        SettingRow(title: title, detail: detail, symbol: symbol) {
+            if granted {
+                StatusBadge(title: "Allowed")
+            } else if undecided {
+                PillButton(title: "Allow", action: request)
+            } else {
+                PillButton(title: "Open Settings") { openPrivacySettings(pane) }
+            }
+        }
+    }
+
+    private func refresh() {
+        let connected = Set([AgentKind.claude, .codex].filter(AgentHooks.isConnected))
+        if connected != agents { agents = connected }
+        camera = AVCaptureDevice.authorizationStatus(for: .video)
+        reminders = EKEventStore.authorizationStatus(for: .reminder)
+        accessibility = AXIsProcessTrusted()
+        launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
+
+    private func setLaunchAtLogin(_ on: Bool) {
+        do {
+            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+        } catch {
+            NSLog("Launch at login change failed: \(error.localizedDescription)")
+        }
+        launchAtLogin = SMAppService.mainApp.status == .enabled
+    }
+
+    /// Asks for each missing piece in turn, so macOS shows one prompt at a time.
+    private func connectAll() {
+        connecting = true
+        Task {
+            for agent in [AgentKind.claude, .codex] where !AgentHooks.isConnected(agent) {
+                setAgentHooks(agent, connected: true)
+            }
+            if SMAppService.mainApp.status != .enabled { setLaunchAtLogin(true) }
+            if AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined {
+                _ = await AVCaptureDevice.requestAccess(for: .video)
+            }
+            if EKEventStore.authorizationStatus(for: .reminder) == .notDetermined {
+                await model.reminders.requestAccess().value
+            }
+            if !AXIsProcessTrusted() { model.vpn.requestAppControlPermission() }
+            refresh()
+            connecting = false
+        }
+    }
+
+    private func openPrivacySettings(_ pane: String) {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+}
+
+private struct GeneralSettings: View {
+    let settings: AppSettings
+    let tabs: [NotchTab]
+
+    var body: some View {
+        SettingRow(title: "Open the notch", detail: settings.openOnClick ? "Click the notch to open it" : "Rest the pointer on the notch") {
+            Choice(options: [("Hover", false), ("Click", true)], selection: settings.openOnClick) { settings.openOnClick = $0 }
+        }
+        if !settings.openOnClick {
+            RowDivider()
+            SettingRow(title: "Open after hovering", detail: "How long to rest on the notch") {
+                Choice(options: [("Instant", 0.1), ("Short", 0.3), ("Long", 0.6)],
+                       selection: settings.openDelay) { settings.openDelay = $0 }
+            }
         }
         RowDivider()
         SettingRow(title: "Close after leaving", detail: "How long the panel waits for you") {
@@ -87,7 +252,7 @@ private struct GeneralSettings: View {
         SettingRow(title: "Open to", detail: "The page you see when the notch opens") {
             MenuButton(title: settings.startTab?.title ?? "Last page used") {
                 [ActionMenuItem("Last page used", checked: settings.startTab == nil) { settings.startTab = nil }, .separator()]
-                    + model.visibleTabs.map { tab in
+                    + tabs.map { tab in
                         ActionMenuItem(tab.title, checked: settings.startTab == tab) { settings.startTab = tab }
                     }
             }
@@ -95,38 +260,87 @@ private struct GeneralSettings: View {
     }
 }
 
-private struct AgentSettings: View {
+private struct AppearanceSettings: View {
     let settings: AppSettings
-    @State private var connected: Set<AgentKind> = []
 
     var body: some View {
-        agentRow(.claude, title: "Claude Code", detail: "Questions and approvals come to the notch")
-        RowDivider()
-        agentRow(.codex, title: "Codex", detail: "Run /hooks in Codex once to trust it")
-        RowDivider()
-        SettingRow(title: "Flash when an agent finishes", detail: "A green Done beside the closed notch") {
-            SwitchView(isOn: settings.showFinishedAlert) { settings.showFinishedAlert.toggle() }
+        SettingRow(title: "Accent color", detail: "Switches, the open tab, and highlights") {
+            HStack(spacing: 6) {
+                ForEach(AccentChoice.allCases, id: \.self) { choice in
+                    AccentSwatch(choice: choice, selected: settings.accent == choice) { settings.accent = choice }
+                }
+            }
         }
-        Spacer(minLength: 0)
-        Text("Connecting adds NotchLab's helper to the agent's hook settings. Open sessions need a restart.")
-            .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(.white.opacity(0.35))
-            .fixedSize(horizontal: false, vertical: true)
-            .onAppear(perform: refresh)
+        RowDivider()
+        SettingRow(title: "Panel width", detail: "How wide the open notch gets") {
+            Choice(options: [("Standard", 680.0), ("Wide", 760.0), ("Wider", 840.0)],
+                   selection: settings.panelWidth) { settings.panelWidth = $0 }
+        }
     }
+}
 
-    private func agentRow(_ agent: AgentKind, title: String, detail: String) -> some View {
-        let isConnected = connected.contains(agent)
-        return SettingRow(title: title, detail: isConnected ? detail : "Not connected", icon: agent) {
-            SwitchView(isOn: isConnected) {
-                setAgentHooks(agent, connected: !isConnected)
-                refresh()
+private struct HomeSettings: View {
+    let model: NotchModel
+
+    var body: some View {
+        let settings = model.settings
+        SettingRow(title: "Music controls", detail: "What the player shows and controls") {
+            MenuButton(title: settings.mediaSource.title) {
+                MediaSource.allCases.map { source in
+                    ActionMenuItem(source.title, checked: settings.mediaSource == source) { model.nowPlaying.setSource(source) }
+                }
+            }
+        }
+        RowDivider()
+        cardRow(.music, detail: "Song, controls, and speaker picker")
+        ForEach(settings.homeOrder, id: \.self) { card in
+            RowDivider()
+            let index = settings.homeOrder.firstIndex(of: card) ?? 0
+            let place = index == 0 ? "Top" : index == settings.homeOrder.count - 1 ? "Bottom" : "Middle"
+            cardRow(card, detail: "\(place) of the column beside the music") {
+                HStack(spacing: 0) {
+                    moveButton("chevron.up", label: "Move \(card.title) up", enabled: index > 0) {
+                        settings.moveColumnCard(card, by: -1)
+                    }
+                    moveButton("chevron.down", label: "Move \(card.title) down", enabled: index < settings.homeOrder.count - 1) {
+                        settings.moveColumnCard(card, by: 1)
+                    }
+                }
+            }
+        }
+        RowDivider()
+        SettingRow(title: "Mirror button", detail: "The camera button on Home") {
+            SwitchView(isOn: settings.showMirrorButton) {
+                settings.showMirrorButton.toggle()
+                if !settings.showMirrorButton { model.mirror.isOn = false }
             }
         }
     }
 
-    private func refresh() {
-        connected = Set([AgentKind.claude, .codex].filter(AgentHooks.isConnected))
+    private func cardRow(_ card: HomeCard, detail: String,
+                         @ViewBuilder extra: () -> some View = { EmptyView() }) -> some View {
+        let shown = !model.settings.hiddenHomeCards.contains(card)
+        return SettingRow(title: card.title, detail: detail) {
+            HStack(spacing: 10) {
+                extra()
+                SwitchView(isOn: shown) {
+                    if shown { model.settings.hiddenHomeCards.insert(card) } else { model.settings.hiddenHomeCards.remove(card) }
+                }
+            }
+        }
+    }
+
+    private func moveButton(_ symbol: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 9, weight: .bold))
+                .frame(width: 24, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle())
+        .disabled(!enabled)
+        .opacity(enabled ? 0.8 : 0.25)
+        .accessibilityLabel(label)
     }
 }
 
@@ -139,19 +353,59 @@ private struct PageSettings: View {
         pageRow(.reminders, detail: "Your Apple Reminders lists")
         RowDivider()
         pageRow(.dev, detail: "Usage and sessions. Shows up anyway when an agent asks.")
+        Text("ON THE DEV PAGE")
+            .font(.system(size: 9.5, weight: .bold))
+            .foregroundStyle(.white.opacity(0.35))
+            .padding(.top, 14)
+            .padding(.bottom, 2)
+        devRow(.usage, detail: "Claude and Codex session and weekly limits")
         RowDivider()
-        SettingRow(title: "Mirror button", detail: "The camera button on Home") {
-            SwitchView(isOn: model.settings.showMirrorButton) {
-                model.settings.showMirrorButton.toggle()
-                if !model.settings.showMirrorButton { model.mirror.isOn = false }
-            }
-        }
+        devRow(.stats, detail: "CPU, memory, and GPU")
+        RowDivider()
+        devRow(.sessions, detail: "Recent agent sessions and their status")
     }
 
     private func pageRow(_ tab: NotchTab, detail: String) -> some View {
         let shown = !model.settings.hiddenTabs.contains(tab)
         return SettingRow(title: tab.title, detail: detail) {
             SwitchView(isOn: shown) { model.setTab(tab, hidden: shown) }
+        }
+    }
+
+    private func devRow(_ card: DevCard, detail: String) -> some View {
+        let shown = !model.settings.hiddenDevCards.contains(card)
+        return SettingRow(title: card.title, detail: detail) {
+            SwitchView(isOn: shown) {
+                if shown { model.settings.hiddenDevCards.insert(card) } else { model.settings.hiddenDevCards.remove(card) }
+            }
+        }
+    }
+}
+
+private struct AgentSettings: View {
+    let settings: AppSettings
+
+    var body: some View {
+        SettingRow(title: "Questions & approvals", detail: routingDetail) {
+            Choice(options: [("Notch", PromptRouting.notch), ("Auto", .auto), ("Terminal", .terminal)],
+                   selection: settings.promptRouting) { settings.promptRouting = $0 }
+        }
+        RowDivider()
+        SettingRow(title: "Flash when an agent finishes", detail: "A green Done beside the closed notch") {
+            SwitchView(isOn: settings.showFinishedAlert) { settings.showFinishedAlert.toggle() }
+        }
+        Text("A question answered in the notch doesn't appear in the terminal or Remote Control. Auto keeps them in the notch while you're using the Mac, and sends them to the terminal once you've been away for 2 minutes. Connect Claude Code and Codex in Connections.")
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(.white.opacity(0.35))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 10)
+    }
+
+    private var routingDetail: String {
+        switch settings.promptRouting {
+        case .notch: "Always here; the terminal won't show them"
+        case .auto: "Here at the Mac, terminal when you're away"
+        case .terminal: "In the terminal and Remote Control"
         }
     }
 }
@@ -238,7 +492,7 @@ private struct SidebarButton: View {
             }
             .foregroundStyle(.white.opacity(selected ? 1 : (hovering ? 0.8 : 0.55)))
             .padding(.horizontal, 10)
-            .frame(height: 28)
+            .frame(height: 26)
             .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(selected ? 0.12 : 0)))
             .contentShape(Rectangle())
         }
@@ -251,11 +505,18 @@ private struct SettingRow<Control: View>: View {
     let title: String
     var detail: String?
     var icon: AgentKind?
+    var symbol: String?
     @ViewBuilder let control: Control
 
     var body: some View {
         HStack(spacing: 10) {
             if let icon { AgentIcon(agent: icon, size: 18) }
+            if let symbol {
+                Image(systemName: symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 18, height: 18)
+            }
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.system(size: 12, weight: .semibold))
                 if let detail {
@@ -377,5 +638,45 @@ private struct PillButton: View {
         }
         .buttonStyle(PressableStyle())
         .opacity(isEnabled ? 1 : 0.4)
+    }
+}
+
+private struct StatusBadge: View {
+    let title: String
+    @Environment(\.accent) private var accent
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(accent ?? .green)
+            Text(title).foregroundStyle(.white.opacity(0.6))
+        }
+        .font(.system(size: 11, weight: .semibold))
+    }
+}
+
+private struct AccentSwatch: View {
+    let choice: AccentChoice
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if let color = choice.color {
+                    Circle().fill(color)
+                } else {
+                    // The built-in look mixes green switches with blue highlights.
+                    Circle().fill(LinearGradient(colors: [.green, .notchBlue], startPoint: .topLeading, endPoint: .bottomTrailing))
+                }
+            }
+            .frame(width: 16, height: 16)
+            .padding(2)
+            .overlay(Circle().strokeBorder(.white.opacity(selected ? 0.9 : 0), lineWidth: 1.5))
+            .contentShape(Circle())
+        }
+        .buttonStyle(PressableStyle())
+        .help(choice == .standard ? "Default" : choice.rawValue.capitalized)
+        .accessibilityLabel(choice == .standard ? "Default" : choice.rawValue.capitalized)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

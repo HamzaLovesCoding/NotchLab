@@ -46,7 +46,7 @@ struct MemoryStats: Sendable {
 }
 
 struct GPUStats: Sendable {
-    var usage = 0.0, renderer = 0.0, tiler = 0.0
+    var usage = 0.0
     var memoryInUse: UInt64 = 0
 }
 
@@ -85,11 +85,20 @@ final class SystemMonitor {
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private let sampler = StatsSampler()
     @ObservationIgnored private let queue = DispatchQueue(label: "notch.stats", qos: .utility)
+    @ObservationIgnored private let topQueue = DispatchQueue(label: "notch.stats.top", qos: .utility)
+    @ObservationIgnored private var topRunning = false
     @ObservationIgnored private var iconCache: [String: NSImage] = [:]
 
     func start() {
         guard timer == nil else { return }
-        tick()
+        // Rates come from the difference between two samples. Start from a fresh baseline so
+        // the first reading covers the last half second, not the time since the page was last open.
+        let sampler = sampler
+        queue.async { sampler.restart() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, self.timer != nil else { return }
+            self.tick()
+        }
         timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
@@ -117,6 +126,23 @@ final class SystemMonitor {
         queue.async { [weak self] in
             let snapshot = sampler.sample(processesFor: kind)
             DispatchQueue.main.async { self?.apply(snapshot, kind: kind) }
+        }
+        if let kind, kind != .gpu, !topRunning {
+            // `top` takes a second to measure, so it runs apart from the totals.
+            topRunning = true
+            topQueue.async { [weak self] in
+                let samples = StatsSampler.topProcesses(sortedBy: kind)
+                DispatchQueue.main.async { self?.applyTop(samples, kind: kind) }
+            }
+        }
+    }
+
+    private func applyTop(_ samples: [ProcessSample], kind: StatKind) {
+        topRunning = false
+        guard kind == detailKind else { return }
+        processes = samples.map { sample in
+            let (name, icon) = identity(of: sample)
+            return ProcessUsage(id: sample.pid, name: name, icon: icon, value: sample.value)
         }
     }
 
@@ -157,16 +183,17 @@ final class SystemMonitor {
 /// Raw sampling. Only used from SystemMonitor's serial queue.
 final class StatsSampler: @unchecked Sendable {
     private let host = mach_host_self()
-    private let timebase: (numer: UInt64, denom: UInt64)
     private var previousTicks: (user: UInt32, system: UInt32, idle: UInt32, nice: UInt32)?
     private var previousProcessTimes: [pid_t: UInt64] = [:]
     private var previousProcessSampleTime: UInt64 = 0
     private var previousKind: StatKind?
+    private let gpuResidency = GPUResidency()
 
-    init() {
-        var info = mach_timebase_info_data_t()
-        mach_timebase_info(&info)
-        timebase = (UInt64(info.numer), UInt64(info.denom))
+    /// Takes new baselines for CPU and GPU rates, dropping the old ones.
+    func restart() {
+        previousTicks = nil
+        _ = cpuStats()
+        gpuResidency?.restart()
     }
 
     func sample(processesFor kind: StatKind?) -> StatsSnapshot {
@@ -178,12 +205,8 @@ final class StatsSampler: @unchecked Sendable {
             previousKind = kind
             previousProcessTimes = [:]
         }
-        switch kind {
-        case .cpu: snapshot.processes = rates(from: cpuTimes().mapValues { ($0, "") })
-        case .gpu: snapshot.processes = rates(from: gpuTimes)
-        case .memory: snapshot.processes = topFootprints()
-        case nil: break
-        }
+        // CPU and memory processes come from `topProcesses`, which SystemMonitor runs separately.
+        if kind == .gpu { snapshot.processes = rates(from: gpuTimes) }
         return snapshot
     }
 
@@ -234,8 +257,8 @@ final class StatsSampler: @unchecked Sendable {
         return memory
     }
 
-    /// Overall utilization from the accelerator, plus cumulative GPU time per process from
-    /// its user clients (each Metal client reports `accumulatedGPUTime` in nanoseconds).
+    /// Overall utilization, plus cumulative GPU time per process from the accelerator's user
+    /// clients (each Metal client reports `accumulatedGPUTime` in nanoseconds).
     private func gpuStats(perProcess: Bool) -> (GPUStats, [pid_t: (UInt64, String)]) {
         var stats = GPUStats()
         var perPid: [pid_t: (UInt64, String)] = [:]
@@ -248,8 +271,6 @@ final class StatsSampler: @unchecked Sendable {
         while accelerator != 0 {
             if let perf = property(accelerator, "PerformanceStatistics") as? [String: Any] {
                 stats.usage = max(stats.usage, double(perf["Device Utilization %"]))
-                stats.renderer = max(stats.renderer, double(perf["Renderer Utilization %"]))
-                stats.tiler = max(stats.tiler, double(perf["Tiler Utilization %"]))
                 stats.memoryInUse += UInt64(double(perf["In use system memory"]))
             }
             if perProcess {
@@ -272,6 +293,8 @@ final class StatsSampler: @unchecked Sendable {
             IOObjectRelease(accelerator)
             accelerator = IOIteratorNext(iterator)
         }
+        // Device Utilization is one instant and jumps around; prefer the average since the last sample.
+        if let active = gpuResidency?.activePercent() { stats.usage = active }
         return (stats, perPid)
     }
 
@@ -289,27 +312,6 @@ final class StatsSampler: @unchecked Sendable {
     private func double(_ value: Any?) -> Double { (value as? NSNumber)?.doubleValue ?? 0 }
 
     // MARK: Processes
-
-    private func allPids() -> [pid_t] {
-        let count = proc_listallpids(nil, 0)
-        guard count > 0 else { return [] }
-        var pids = [pid_t](repeating: 0, count: Int(count) + 64)
-        let filled = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size))
-        return pids.prefix(Int(max(filled, 0))).filter { $0 > 0 }
-    }
-
-    /// CPU time in nanoseconds for every process we're allowed to inspect (root-owned
-    /// processes need privileges and are skipped).
-    private func cpuTimes() -> [pid_t: UInt64] {
-        var times: [pid_t: UInt64] = [:]
-        let size = Int32(MemoryLayout<proc_taskinfo>.size)
-        for pid in allPids() {
-            var info = proc_taskinfo()
-            guard proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &info, size) == size else { continue }
-            times[pid] = (info.pti_total_user + info.pti_total_system) * timebase.numer / timebase.denom
-        }
-        return times
-    }
 
     /// Converts cumulative nanosecond counters into percent of one core since the last call.
     private func rates(from times: [pid_t: (UInt64, String)]) -> [ProcessSample] {
@@ -329,23 +331,129 @@ final class StatsSampler: @unchecked Sendable {
         }
     }
 
-    private func topFootprints() -> [ProcessSample] {
-        var footprints: [(pid_t, UInt64)] = []
-        for pid in allPids() {
-            var info = rusage_info_v4()
-            let status = withUnsafeMutablePointer(to: &info) {
-                $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(pid, RUSAGE_INFO_V4, $0) }
-            }
-            if status == 0 { footprints.append((pid, info.ri_phys_footprint)) }
+    /// The top 10 processes by CPU or memory, including system ones like WindowServer and
+    /// kernel_task that an app can't inspect itself. `top` is setuid root, so it sees them all,
+    /// and its %CPU and MEM are what Activity Monitor shows. Takes about a second.
+    static func topProcesses(sortedBy kind: StatKind) -> [ProcessSample] {
+        let top = Process()
+        top.executableURL = URL(fileURLWithPath: "/usr/bin/top")
+        // %CPU is only measured in the second sample.
+        top.arguments = ["-l", "2", "-s", "1", "-n", "12", "-o", kind == .memory ? "mem" : "cpu",
+                         "-stats", "pid,cpu,mem,command"]
+        let pipe = Pipe()
+        top.standardOutput = pipe
+        top.standardError = FileHandle.nullDevice
+        guard (try? top.run()) != nil else { return [] }
+        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        top.waitUntilExit()
+        let lines = output.split(separator: "\n")
+        guard let header = lines.lastIndex(where: { $0.hasPrefix("PID") }) else { return [] }
+        let samples: [ProcessSample] = lines[(header + 1)...].compactMap { line in
+            let fields = line.split(separator: " ", maxSplits: 3)
+            guard fields.count == 4, let pid = pid_t(fields[0]), pid != top.processIdentifier,
+                  let cpu = Double(fields[1]) else { return nil }
+            if kind == .cpu, cpu < 0.1 { return nil }
+            let value = kind == .memory ? Double(bytes(fields[2])) : cpu
+            return ProcessSample(pid: pid, value: value, path: path(of: pid),
+                                 fallbackName: fields[3].trimmingCharacters(in: .whitespaces))
         }
-        return footprints.sorted { $0.1 > $1.1 }.prefix(10).map {
-            ProcessSample(pid: $0.0, value: Double($0.1), path: Self.path(of: $0.0), fallbackName: "")
+        return Array(samples.prefix(10))
+    }
+
+    /// top's MEM column: "974M-", "7728K+", "1.2G".
+    private static func bytes(_ field: Substring) -> UInt64 {
+        let text = field.trimmingCharacters(in: CharacterSet(charactersIn: "+-"))
+        let scales: [Character: Double] = ["B": 1, "K": 1024, "M": 1_048_576, "G": 1_073_741_824, "T": 1_099_511_627_776]
+        guard let unit = text.last, let scale = scales[unit], let number = Double(text.dropLast()) else {
+            return UInt64(Double(text) ?? 0)
         }
+        return UInt64(number * scale)
     }
 
     private static func path(of pid: pid_t) -> String {
         var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
         let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
         return length > 0 ? String(cString: buffer) : ""
+    }
+}
+
+/// The share of time the GPU was active since the last call: the "GPU HW active residency"
+/// that `powermetrics` reports. IOReport needs no privileges, but it's a private framework, so
+/// it's loaded at runtime and the caller falls back to Device Utilization if it's missing.
+final class GPUResidency: @unchecked Sendable {
+    private typealias CopyChannels = @convention(c) (CFString?, CFString?, UInt64, UInt64, UInt64) -> UnsafeMutableRawPointer?
+    private typealias CreateSubscription = @convention(c) (UnsafeMutableRawPointer?, CFMutableDictionary,
+                                                           UnsafeMutablePointer<UnsafeMutableRawPointer?>, UInt64, CFTypeRef?) -> UnsafeMutableRawPointer?
+    private typealias CreateSamples = @convention(c) (UnsafeMutableRawPointer, CFMutableDictionary, CFTypeRef?) -> UnsafeMutableRawPointer?
+    private typealias CreateDelta = @convention(c) (CFDictionary, CFDictionary, CFTypeRef?) -> UnsafeMutableRawPointer?
+    private typealias ChannelName = @convention(c) (CFDictionary) -> UnsafeMutableRawPointer?
+    private typealias StateCount = @convention(c) (CFDictionary) -> Int32
+    private typealias StateName = @convention(c) (CFDictionary, Int32) -> UnsafeMutableRawPointer?
+    private typealias StateResidency = @convention(c) (CFDictionary, Int32) -> Int64
+
+    private let createSamples: CreateSamples
+    private let createDelta: CreateDelta
+    private let channelName: ChannelName
+    private let stateCount: StateCount
+    private let stateName: StateName
+    private let stateResidency: StateResidency
+    private let subscription: UnsafeMutableRawPointer
+    private let channels: CFMutableDictionary
+    private var previous: CFDictionary?
+
+    init?() {
+        guard let library = dlopen("/usr/lib/libIOReport.dylib", RTLD_NOW) else { return nil }
+        func load<T>(_ name: String, _ type: T.Type) -> T? { dlsym(library, name).map { unsafeBitCast($0, to: type) } }
+        guard let copyChannels = load("IOReportCopyChannelsInGroup", CopyChannels.self),
+              let subscribe = load("IOReportCreateSubscription", CreateSubscription.self),
+              let createSamples = load("IOReportCreateSamples", CreateSamples.self),
+              let createDelta = load("IOReportCreateSamplesDelta", CreateDelta.self),
+              let channelName = load("IOReportChannelGetChannelName", ChannelName.self),
+              let stateCount = load("IOReportStateGetCount", StateCount.self),
+              let stateName = load("IOReportStateGetNameForIndex", StateName.self),
+              let stateResidency = load("IOReportStateGetResidency", StateResidency.self),
+              let group = copyChannels("GPU Stats" as CFString, "GPU Performance States" as CFString, 0, 0, 0),
+              let desired = CFDictionaryCreateMutableCopy(nil, 0, Unmanaged<CFDictionary>.fromOpaque(group).takeRetainedValue())
+        else { return nil }
+        var subscribed: UnsafeMutableRawPointer?
+        guard let subscription = subscribe(nil, desired, &subscribed, 0, nil), let subscribed else { return nil }
+        self.createSamples = createSamples
+        self.createDelta = createDelta
+        self.channelName = channelName
+        self.stateCount = stateCount
+        self.stateName = stateName
+        self.stateResidency = stateResidency
+        self.subscription = subscription
+        channels = Unmanaged<CFMutableDictionary>.fromOpaque(subscribed).takeRetainedValue()
+    }
+
+    func restart() {
+        previous = createSamples(subscription, channels, nil).map { Unmanaged<CFDictionary>.fromOpaque($0).takeRetainedValue() }
+    }
+
+    func activePercent() -> Double? {
+        guard let sample = createSamples(subscription, channels, nil) else { return nil }
+        let current = Unmanaged<CFDictionary>.fromOpaque(sample).takeRetainedValue()
+        defer { previous = current }
+        guard let previous, let deltaPointer = createDelta(previous, current, nil) else { return nil }
+        let delta = Unmanaged<CFDictionary>.fromOpaque(deltaPointer).takeRetainedValue() as NSDictionary
+        guard let items = delta["IOReportChannels"] as? [NSDictionary] else { return nil }
+        for item in items {
+            let channel = item as CFDictionary
+            guard string(channelName(channel)) == "GPUPH" else { continue }
+            var total: Int64 = 0, active: Int64 = 0
+            for index in 0..<stateCount(channel) {
+                let residency = stateResidency(channel, index)
+                total += residency
+                if !["OFF", "IDLE", "DOWN"].contains(string(stateName(channel, index))) { active += residency }
+            }
+            return total > 0 ? Double(active) / Double(total) * 100 : nil
+        }
+        return nil
+    }
+
+    /// IOReport's Get functions don't transfer ownership.
+    private func string(_ pointer: UnsafeMutableRawPointer?) -> String {
+        pointer.map { Unmanaged<CFString>.fromOpaque($0).takeUnretainedValue() as String } ?? ""
     }
 }

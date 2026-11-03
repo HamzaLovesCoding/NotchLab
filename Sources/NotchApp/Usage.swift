@@ -51,7 +51,6 @@ final class UsageStore {
         guard !refreshing else { return }
         refreshing = true
         lastRefresh = Date()
-        let previousClaude = claude
         Task {
             async let limits = ClaudeLimits.fetch()
             async let claudeTotals = claudeLogs.totals()
@@ -61,9 +60,17 @@ final class UsageStore {
             let (plan, session, week, note) = await limits
             newClaude.plan = plan
             newClaude.note = note
-            // Keep the last good numbers through a transient network error.
-            newClaude.session = session ?? (note == ClaudeLimits.offlineNote ? previousClaude.session : nil)
-            newClaude.week = week ?? (note == ClaudeLimits.offlineNote ? previousClaude.week : nil)
+            newClaude.session = session
+            newClaude.week = week
+            if session != nil || week != nil {
+                ClaudeLimits.saveLastKnown(session: session, week: week)
+            } else if note != ClaudeLimits.signedOutNote, let last = ClaudeLimits.lastKnown() {
+                // Claude Code renews its login only while it runs, so between sessions show the
+                // last numbers it got, the way Codex's come from its last log entry.
+                newClaude.session = last.session
+                newClaude.week = last.week
+                newClaude.note = "Updated \(last.age) ago"
+            }
             (newClaude.today, newClaude.last7Days) = await claudeTotals
 
             claude = newClaude
@@ -161,11 +168,12 @@ enum UsageParsing {
 /// The token is read through /usr/bin/security (which Claude Code itself uses), so there's
 /// no keychain prompt. It is never refreshed here: rotating it would sign Claude Code out.
 enum ClaudeLimits {
-    static let offlineNote = "Offline — showing last known limits"
+    static let offlineNote = "Offline"
+    static let signedOutNote = "Sign in to Claude Code to see limits"
 
     static func fetch() async -> (plan: String?, session: LimitWindow?, week: LimitWindow?, note: String?) {
         guard let credentials = await Task.detached(operation: readCredentials).value else {
-            return (nil, nil, nil, "Sign in to Claude Code to see limits")
+            return (nil, nil, nil, signedOutNote)
         }
         let plan = credentials.plan?.capitalized
         if let expiry = credentials.expiresAt, expiry < Date() {
@@ -186,6 +194,30 @@ enum ClaudeLimits {
         } catch {
             return (plan, nil, nil, offlineNote)
         }
+    }
+
+    static func saveLastKnown(session: LimitWindow?, week: LimitWindow?) {
+        var saved: [String: Double] = ["date": Date().timeIntervalSince1970]
+        saved["session"] = session?.usedPercent
+        saved["sessionResets"] = session?.resetsAt?.timeIntervalSince1970
+        saved["week"] = week?.usedPercent
+        saved["weekResets"] = week?.resetsAt?.timeIntervalSince1970
+        UserDefaults.standard.set(saved, forKey: "claudeLastLimits")
+    }
+
+    /// The last limits fetched, with any window that has since reset shown as unused.
+    static func lastKnown() -> (session: LimitWindow?, week: LimitWindow?, age: String)? {
+        guard let saved = UserDefaults.standard.dictionary(forKey: "claudeLastLimits") as? [String: Double],
+              let date = saved["date"] else { return nil }
+        func window(_ key: String) -> LimitWindow? {
+            guard let used = saved[key] else { return nil }
+            let resetsAt = saved[key + "Resets"].map(Date.init(timeIntervalSince1970:))
+            if let resetsAt, resetsAt < Date() { return LimitWindow(usedPercent: 0, resetsAt: nil) }
+            return LimitWindow(usedPercent: used, resetsAt: resetsAt)
+        }
+        let minutes = max(1, Int(Date().timeIntervalSince1970 - date) / 60)
+        let age = minutes < 60 ? "\(minutes)m" : minutes < 1440 ? "\(minutes / 60)h" : "\(minutes / 1440)d"
+        return (window("session"), window("week"), age)
     }
 
     private static func window(_ value: Any?) -> LimitWindow? {

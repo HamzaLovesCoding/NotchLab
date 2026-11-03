@@ -2,8 +2,9 @@
 import Observation
 import SwiftUI
 
-/// Front camera preview. The session only runs while the mirror tile is on screen,
-/// so the camera (and its green light) turns off whenever the notch closes.
+/// Front camera preview. The session only runs while the mirror tile is on screen, and
+/// closing the notch or clicking the tile turns the mirror off, so the camera (and its green
+/// light) never stays on in the background.
 @Observable
 @MainActor
 final class Mirror {

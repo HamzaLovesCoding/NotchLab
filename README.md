@@ -32,7 +32,16 @@ Requires an **Apple silicon Mac** and **macOS 14 or later**.
 
    Or skip the prompt from Terminal: `xattr -dr com.apple.quarantine /Applications/NotchApp.app`
 
-Hover over the notch to get started. Click the gear for **Settings**: Launch at Login, hover timing, which pages show, focus timer lengths, clipboard history, and connecting your agents. Allow Camera and Reminders access when you use those features; controlling some VPN apps also requires Accessibility access.
+Hover over the notch to get started. The first time it opens, you'll see **Connections**: Claude Code, Codex, Claude usage, Camera, Reminders, VPN control (Accessibility), and Launch at Login, each with its own button, plus **Connect all** to set everything up at once. It's always under the gear in **Settings**, along with:
+
+- **General:** open on hover or on click, and how fast it opens and closes.
+- **Appearance:** accent color and panel width.
+- **Home:** which cards show and their order.
+- **Pages:** which pages and Dev cards show.
+- **Agents:** where questions and approvals go.
+- Focus timer lengths and clipboard history.
+
+The camera turns off when the notch closes or when you click the mirror.
 
 ## Build from source
 
@@ -50,7 +59,7 @@ This builds, installs, and opens `/Applications/NotchApp.app`. Use `./build.sh -
 
 NotchLab shows Claude Code and Codex permission requests in the notch with **Allow** and **Deny**, lets you answer Claude's multiple-choice questions there, and flashes a side alert when an agent finishes.
 
-**To connect:** open the **Dev** page and click **Connect Claude** and **Connect Codex**, or switch them on under **Settings → Agents**. NotchLab adds its bundled `notch-hook` helper to `~/.claude/settings.json` and `~/.codex/hooks.json`, keeps everything else in those files, and saves a one-time backup next to each as `*.before-notchapp`. Then:
+**To connect:** click **Connect Claude** and **Connect Codex** on the **Dev** page, or switch them on in **Settings → Connections**. NotchLab adds its bundled `notch-hook` helper to `~/.claude/settings.json` and `~/.codex/hooks.json`, keeps everything else in those files, and saves a one-time backup next to each as `*.before-notchapp`. Then:
 
 - **Codex:** run `/hooks` in Codex once and trust NotchLab's hooks. Codex won't run new hooks until you do.
 - Restart any Claude Code or Codex sessions that were already open.
@@ -86,4 +95,8 @@ Run NotchApp from your Applications folder before connecting, since the hooks po
 }
 ```
 
-While a request waits in the notch, the agent holds its terminal prompt. Answer in the notch, click **Terminal** to answer there instead, or wait about five minutes for the terminal prompt to come back. If NotchLab isn't running, the hook exits immediately and the agents behave as usual. Codex questions aren't supported yet, only its approvals and finished alerts.
+While a request waits in the notch, the agent holds its terminal prompt, so the question doesn't show in the terminal or in Claude's Remote Control. Answer in the notch, click **Terminal** to answer there instead, or wait about five minutes for the terminal prompt to come back. **Settings → Agents** picks where questions and approvals go:
+
+- **Auto** (default): the notch while you're using the Mac. If you've been away for 2 minutes or the screen is locked, they go to the terminal, including any already waiting.
+- **Notch:** always in the notch.
+- **Terminal:** always in the terminal and Remote Control. If NotchLab isn't running, the hook exits immediately and the agents behave as usual. Codex questions aren't supported yet, only its approvals and finished alerts.

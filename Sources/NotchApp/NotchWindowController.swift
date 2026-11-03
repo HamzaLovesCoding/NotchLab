@@ -92,8 +92,12 @@ final class NotchWindowController {
         NSRect(x: notchRect.minX, y: notchRect.minY, width: notchRect.width, height: notchRect.height + 4)
     }
 
-    /// Generous target while dragging files so the drop zone is easy to hit.
-    private var dragRect: NSRect { hoverRect.insetBy(dx: -40, dy: -14) }
+    /// While a file is being dragged, the shelf opens anywhere across the open panel's width
+    /// and down to 80 points below the notch, so the file only has to come near it.
+    private var dragRect: NSRect {
+        let width = max(model.settings.panelWidth, notchRect.width)
+        return NSRect(x: notchRect.midX - width / 2, y: notchRect.minY - 80, width: width, height: notchRect.height + 84)
+    }
 
     private var expandedRect: NSRect {
         let size = model.panelSize
@@ -120,7 +124,9 @@ final class NotchWindowController {
         switch event.type {
         case .leftMouseDown:
             dragPasteboardCount = NSPasteboard(name: .drag).changeCount
-            if model.isExpanded, !expandedRect.contains(self.mouseLocation()) { collapse() }
+            let point = self.mouseLocation()
+            if model.isExpanded, !expandedRect.contains(point) { collapse() }
+            if !model.isExpanded, model.settings.openOnClick, hoverRect.contains(point) { expand() }
         case .leftMouseDragged:
             if !fileDragActive {
                 let pasteboard = NSPasteboard(name: .drag)
@@ -166,7 +172,7 @@ final class NotchWindowController {
             if dragRect.contains(point), filesEnabled { expand(to: .shelf) }
             return
         }
-        if hoverRect.contains(point), !buttonDown {
+        if hoverRect.contains(point), !buttonDown, !model.settings.openOnClick {
             guard hoverWork == nil else { return }
             let work = DispatchWorkItem { [weak self] in
                 guard let self else { return }
@@ -207,6 +213,12 @@ final class NotchWindowController {
         hoverWork?.cancel()
         hoverWork = nil
         if let tab, model.tab != tab { model.tab = tab }
+        // First open: show what can be connected, unless the notch opened for a drop or an agent.
+        if !model.isExpanded, tab == nil, model.agents.requests.isEmpty, !model.settings.didShowSetup {
+            model.settings.didShowSetup = true
+            model.showSettings = true
+            model.showWelcome = true
+        }
         if !model.isExpanded { model.isExpanded = true }
         setInteractive(true)
     }
@@ -217,6 +229,8 @@ final class NotchWindowController {
         guard model.isExpanded else { return }
         model.isExpanded = false
         model.resetOverlays()
+        // The camera turns off with the notch; reopening shows Home without it.
+        model.mirror.isOn = false
         if let start = model.settings.startTab { model.tab = start }
         // Dev stays visible only while an agent waits; once that's answered, don't reopen to a hidden page.
         if !model.visibleTabs.contains(model.tab) { model.tab = .home }

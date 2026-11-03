@@ -17,15 +17,17 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1</string>
+    <string>1.2</string>
     <key>CFBundleVersion</key>
-    <string>2</string>
+    <string>3</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>When you pick Spotify or Apple Music in Settings, the music player controls that app directly.</string>
     <key>NSCameraUsageDescription</key>
     <string>The mirror shows your camera inside the notch.</string>
     <key>NSRemindersFullAccessUsageDescription</key>

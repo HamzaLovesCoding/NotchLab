@@ -34,6 +34,8 @@ final class NotchModel {
     var statDetail: StatKind?
     var showClipboard = false
     var showSettings = false
+    /// The first time the notch opens, Settings shows Connections with a welcome line.
+    var showWelcome = false
     var notchSize = CGSize(width: 200, height: 32)
 
     /// Highlighted drop zone while a file drag hovers the panel.
@@ -41,7 +43,7 @@ final class NotchModel {
     /// AirDrop tile frame in the hosting view's (top-left origin) space, used to route drops.
     var airDropFrame: CGRect = .zero
 
-    let nowPlaying = NowPlaying()
+    let nowPlaying: NowPlaying
     let audioOutputs = AudioOutputs()
     let settings: AppSettings
     let focusTimer: FocusTimer
@@ -53,11 +55,13 @@ final class NotchModel {
     let reminders = RemindersStore()
     let usage = UsageStore()
     let system = SystemMonitor()
-    let agents = AgentMonitor()
+    let agents: AgentMonitor
 
     init() {
         let settings = AppSettings()
         self.settings = settings
+        agents = AgentMonitor(settings: settings)
+        nowPlaying = NowPlaying(settings: settings)
         focusTimer = FocusTimer(settings: settings)
         clipboard = ClipboardHistory(settings: settings)
         tab = settings.startTab ?? .home
@@ -69,7 +73,6 @@ final class NotchModel {
         }
     }
 
-    static let panelWidth: CGFloat = 680
     /// Vertical padding around page content (6 above, 14 below).
     static let pagePadding: CGFloat = 20
     private static let clipboardArea: CGFloat = 330
@@ -92,22 +95,34 @@ final class NotchModel {
 
     /// Height below the tab bar that the current page needs.
     var pageArea: CGFloat {
-        if showSettings { return 260 }
+        if showSettings { return 320 }
         return switch tab {
         case .home: notes.isOpen ? 190 : 162
         case .shelf: 140
         case .reminders: 236
-        case .dev: statDetail == nil ? 272 : 330
+        case .dev: statDetail == nil ? devArea : 330
+        }
+    }
+
+    /// The usage row is 160 tall and the stats/sessions row 82, with 10 between them.
+    private var devArea: CGFloat {
+        let hidden = settings.hiddenDevCards
+        let top = !agents.requests.isEmpty || !hidden.contains(.usage)
+        let bottom = !hidden.contains(.stats) || !hidden.contains(.sessions)
+        switch (top, bottom) {
+        case (true, true): return 272
+        case (true, false): return 180
+        default: return 102
         }
     }
 
     var panelSize: CGSize {
         let area = showClipboard ? max(pageArea, Self.clipboardArea) : pageArea
-        return CGSize(width: Self.panelWidth, height: notchSize.height + area)
+        return CGSize(width: settings.panelWidth, height: notchSize.height + area)
     }
 
     /// The largest the panel can get; the window is sized to fit it plus shadow.
-    var maxPanelSize: CGSize { CGSize(width: Self.panelWidth, height: notchSize.height + 340) }
+    var maxPanelSize: CGSize { CGSize(width: AppSettings.panelWidths.max() ?? 680, height: notchSize.height + 340) }
 
     /// Esc steps back one level before closing the notch. Returns false when nothing was open.
     func dismissOverlay() -> Bool {
@@ -121,6 +136,7 @@ final class NotchModel {
     func resetOverlays() {
         showClipboard = false
         showSettings = false
+        showWelcome = false
         statDetail = nil
         notes.close()
     }

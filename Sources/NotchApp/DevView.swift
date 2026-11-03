@@ -10,12 +10,13 @@ struct DevView: View {
             if let kind = model.statDetail {
                 StatDetailView(kind: kind, system: model.system) { model.statDetail = nil }
             } else {
+                let hidden = model.settings.hiddenDevCards
                 VStack(spacing: 10) {
                     // An agent waiting on you takes the top spot until it's answered.
                     if let request = model.agents.requests.first {
                         AgentRequestCard(request: request, monitor: model.agents)
                             .frame(height: 160)
-                    } else {
+                    } else if !hidden.contains(.usage) {
                         HStack(spacing: 10) {
                             UsageCard(title: "Claude", usage: model.usage.claude)
                             UsageCard(title: "Codex", usage: model.usage.codex)
@@ -23,9 +24,19 @@ struct DevView: View {
                         .frame(height: 160)
                     }
                     HStack(spacing: 10) {
-                        CompactStats(system: model.system) { model.statDetail = $0 }
-                            .frame(width: 200)
-                        AgentSessionsCard(monitor: model.agents)
+                        if !hidden.contains(.stats) {
+                            CompactStats(system: model.system) { model.statDetail = $0 }
+                                .frame(width: hidden.contains(.sessions) ? nil : 200)
+                        }
+                        if !hidden.contains(.sessions) {
+                            AgentSessionsCard(monitor: model.agents)
+                        }
+                    }
+                    if model.agents.requests.isEmpty, Set(DevCard.allCases).isSubset(of: hidden) {
+                        Text("Every Dev card is off. Turn some on in Settings › Pages.")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.45))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
             }
@@ -91,6 +102,7 @@ struct UsageCard: View {
 struct LimitRow: View {
     let title: String
     let window: LimitWindow?
+    @Environment(\.accent) private var accent
 
     var body: some View {
         VStack(spacing: 3) {
@@ -123,7 +135,7 @@ struct LimitRow: View {
         let used = window?.usedPercent ?? 0
         if used >= 90 { return .red }
         if used >= 70 { return .orange }
-        return Color(red: 0.25, green: 0.55, blue: 1)
+        return accent ?? Color(red: 0.25, green: 0.55, blue: 1)
     }
 
     private var resetText: String {
@@ -303,9 +315,8 @@ struct StatDetailView: View {
                     ("Free", formatBytes(system.memory.free)),
                     ("Total", formatBytes(system.memory.total))]
         case .gpu:
-            return [("Device", String(format: "%.0f%%", system.gpu.usage)),
-                    ("Renderer", String(format: "%.0f%%", system.gpu.renderer)),
-                    ("Tiler", String(format: "%.0f%%", system.gpu.tiler))]
+            return [("Active", String(format: "%.0f%%", system.gpu.usage)),
+                    ("Idle", String(format: "%.0f%%", max(0, 100 - system.gpu.usage)))]
         }
     }
 

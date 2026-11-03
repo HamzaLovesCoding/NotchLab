@@ -6,7 +6,8 @@ struct ClipboardPopup: View {
     @State private var showFavorites = false
     @State private var query = ""
 
-    private static let accent = Color(red: 0.27, green: 0.58, blue: 1)
+    @Environment(\.accent) private var customAccent
+    private var accent: Color { customAccent ?? .notchBlue }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -59,7 +60,7 @@ struct ClipboardPopup: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 0) {
                         ForEach(filtered) { item in
-                            ClipRow(item: item, history: history, accent: Self.accent)
+                            ClipRow(item: item, history: history, accent: accent)
                         }
                     }
                 }
@@ -103,7 +104,7 @@ struct ClipboardPopup: View {
             .foregroundStyle(.white.opacity(selected ? 1 : 0.5))
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(selected ? Self.accent : .clear))
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(selected ? accent : .clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

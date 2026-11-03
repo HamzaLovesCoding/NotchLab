@@ -82,6 +82,7 @@ struct NotchRootView: View {
             }
         }
         .environment(\.colorScheme, .dark)
+        .environment(\.accent, model.settings.accent.color)
     }
 }
 
@@ -197,6 +198,16 @@ final class ActionMenuItem: NSMenuItem {
 
 // MARK: Shared components
 
+extension EnvironmentValues {
+    /// The color picked in Settings › Appearance; nil keeps the built-in colors.
+    @Entry var accent: Color? = nil
+}
+
+extension Color {
+    /// The highlight blue used when no accent color is picked.
+    static let notchBlue = Color(red: 0.27, green: 0.58, blue: 1)
+}
+
 struct IconButton: View {
     let symbol: String
     var active = false
@@ -204,12 +215,13 @@ struct IconButton: View {
     var help: String?
     let action: () -> Void
     @State private var hovering = false
+    @Environment(\.accent) private var accent
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: size, weight: .semibold))
-                .foregroundStyle(.white.opacity(active ? 1 : (hovering ? 0.8 : 0.45)))
+                .foregroundStyle(active ? accent ?? .white : .white.opacity(hovering ? 0.8 : 0.45))
                 .frame(width: 30, height: 26)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(active ? 0.12 : 0)))
                 .contentShape(Rectangle())
