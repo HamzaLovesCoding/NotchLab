@@ -8,7 +8,7 @@ enum PromptRouting: String {
 }
 
 enum HomeCard: String, CaseIterable {
-    case music, timer, vpn, note
+    case music, timer, vpn, note, meeting
 
     var title: String {
         switch self {
@@ -16,8 +16,18 @@ enum HomeCard: String, CaseIterable {
         case .timer: "Focus timer"
         case .vpn: "VPN"
         case .note: "Quick note"
+        case .meeting: "Next meeting"
         }
     }
+}
+
+/// A countdown added in Settings, like a debate speech.
+struct CustomPreset: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var name: String
+    var minutes: Int
+    /// Keeps what's left when another preset is picked, like a debate prep-time bank.
+    var bank = false
 }
 
 enum DevCard: String, CaseIterable {
@@ -74,18 +84,26 @@ final class AppSettings {
     var promptRouting: PromptRouting { didSet { defaults.set(promptRouting.rawValue, forKey: "promptRouting") } }
     /// The green "Done" beside the closed notch when an agent finishes a turn.
     var showFinishedAlert: Bool { didSet { defaults.set(showFinishedAlert, forKey: "showFinishedAlert") } }
+    /// Flash beside the closed notch when a Claude or Codex limit passes 80% and 95%.
+    var usageWarnings: Bool { didSet { defaults.set(usageWarnings, forKey: "usageWarnings") } }
+    /// Artwork and bars beside the closed notch while music plays.
+    var showMusicWing: Bool { didSet { defaults.set(showMusicWing, forKey: "showMusicWing") } }
     /// Preset name to length in minutes, for presets the user changed.
     var timerMinutes: [String: Int] { didSet { defaults.set(timerMinutes, forKey: "timerMinutes") } }
     /// A system sound name; empty plays nothing.
     var timerSound: String { didSet { defaults.set(timerSound, forKey: "timerSound") } }
     var timerCelebration: Bool { didSet { defaults.set(timerCelebration, forKey: "timerCelebration") } }
+    var customPresets: [CustomPreset] { didSet { defaults.set(try? JSONEncoder().encode(customPresets), forKey: "customPresets") } }
+    /// Shortcut names run when a countdown (not a break) starts and when it ends; empty runs nothing.
+    var focusStartShortcut: String { didSet { defaults.set(focusStartShortcut, forKey: "focusStartShortcut") } }
+    var focusEndShortcut: String { didSet { defaults.set(focusEndShortcut, forKey: "focusEndShortcut") } }
     var clipboardLimit: Int { didSet { defaults.set(clipboardLimit, forKey: "clipboardLimit") } }
     var clipboardPaused: Bool { didSet { defaults.set(clipboardPaused, forKey: "clipboardPaused") } }
     /// Set once the Connections page has been shown on first open.
     var didShowSetup: Bool { didSet { defaults.set(didShowSetup, forKey: "didShowSetup") } }
 
     static let panelWidths: [Double] = [680, 760, 840]
-    static let columnCards: [HomeCard] = [.timer, .vpn, .note]
+    static let columnCards: [HomeCard] = [.timer, .vpn, .note, .meeting]
 
     @ObservationIgnored private let defaults = UserDefaults.standard
 
@@ -108,9 +126,14 @@ final class AppSettings {
         panelWidth = Self.panelWidths.contains(width) ? width : 680
         promptRouting = defaults.string(forKey: "promptRouting").flatMap(PromptRouting.init(rawValue:)) ?? .auto
         showFinishedAlert = defaults.object(forKey: "showFinishedAlert") as? Bool ?? true
+        usageWarnings = defaults.object(forKey: "usageWarnings") as? Bool ?? true
+        showMusicWing = defaults.object(forKey: "showMusicWing") as? Bool ?? true
         timerMinutes = defaults.dictionary(forKey: "timerMinutes") as? [String: Int] ?? [:]
         timerSound = defaults.string(forKey: "timerSound") ?? "Hero"
         timerCelebration = defaults.object(forKey: "timerCelebration") as? Bool ?? true
+        customPresets = defaults.data(forKey: "customPresets").flatMap { try? JSONDecoder().decode([CustomPreset].self, from: $0) } ?? []
+        focusStartShortcut = defaults.string(forKey: "focusStartShortcut") ?? ""
+        focusEndShortcut = defaults.string(forKey: "focusEndShortcut") ?? ""
         clipboardLimit = defaults.object(forKey: "clipboardLimit") as? Int ?? 50
         clipboardPaused = defaults.bool(forKey: "clipboardPaused")
         didShowSetup = defaults.bool(forKey: "didShowSetup")

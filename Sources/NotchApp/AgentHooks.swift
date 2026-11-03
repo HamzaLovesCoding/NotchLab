@@ -21,6 +21,11 @@ enum AgentHooks {
         return home.appending(path: path).resolvingSymlinksInPath()
     }
 
+    /// Each agent makes its settings folder (~/.claude, ~/.codex) the first time it runs.
+    static func isInstalled(_ agent: AgentKind) -> Bool {
+        FileManager.default.fileExists(atPath: configURL(agent).deletingLastPathComponent().path)
+    }
+
     static func isConnected(_ agent: AgentKind) -> Bool {
         guard let command = try? command(agent),
               let hooks = (try? load(configURL(agent)))?["hooks"] as? [String: Any] else { return false }

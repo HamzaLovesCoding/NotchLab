@@ -6,9 +6,10 @@ A native macOS app that turns your notch into a small workspace. Hover over it t
 
 ## Features
 
-- Claude and Codex usage tracking, agent status, questions, and approval requests.
+- Claude and Codex usage tracking with warnings near your limits, agent status, questions, and approval requests.
 - CPU, memory, and GPU monitoring.
-- Music controls, audio output switching, and focus timers.
+- Music controls tinted to the album art, audio output switching, and focus timers with your own presets.
+- Your next meeting, with a Join button for Zoom, Meet, and Teams calls.
 - Quick notes, clipboard history, and Apple Reminders.
 - A file shelf with AirDrop, VPN controls, and an optional camera mirror.
 
@@ -32,16 +33,25 @@ Requires an **Apple silicon Mac** and **macOS 14 or later**.
 
    Or skip the prompt from Terminal: `xattr -dr com.apple.quarantine /Applications/NotchApp.app`
 
-Hover over the notch to get started. The first time it opens, you'll see **Connections**: Claude Code, Codex, Claude usage, Camera, Reminders, VPN control (Accessibility), and Launch at Login, each with its own button, plus **Connect all** to set everything up at once. It's always under the gear in **Settings**, along with:
+Hover over the notch to get started. The first time it opens, you'll see **Connections**: Claude Code, Codex, Claude usage, Camera, Reminders, Calendar, VPN control (Accessibility), and Launch at Login, each with its own button, plus **Connect all** to set everything up at once. It's always under the gear in **Settings**, along with:
 
 - **General:** open on hover or on click, and how fast it opens and closes.
 - **Appearance:** accent color and panel width.
-- **Home:** which cards show and their order.
+- **Home:** which cards show and their order, and whether music shows beside the closed notch.
 - **Pages:** which pages and Dev cards show.
-- **Agents:** where questions and approvals go.
-- Focus timer lengths and clipboard history.
+- **Agents:** where questions and approvals go, and usage warnings.
+- **Focus Timer:** lengths, your own presets, and Shortcuts to run when a countdown starts and ends.
+- Clipboard history.
 
 The camera turns off when the notch closes or when you click the mirror.
+
+Beside the closed notch:
+
+- **Music:** the artwork and moving bars while something plays. The bars are decorative; they don't follow the audio.
+- **Meetings:** the next one, from 10 minutes before it starts. The **Next meeting** card on Home has a **Join** button when the event has a Zoom, Meet, Teams, Webex, or FaceTime link.
+- **Usage warnings:** a flash when a Claude or Codex session or weekly limit passes 80% and again at 95%. With warnings on, usage is checked every 5 minutes even while the notch is closed.
+
+Focus timer presets you add can **keep leftover time**: switch to another preset mid-countdown and the time left is saved for next time, like a debate prep-time bank. Reset refills it. A running or paused countdown carries on after NotchLab restarts. To turn a Focus mode on and off with the timer, make two shortcuts in the Shortcuts app with the **Set Focus** action and pick them in **Settings → Focus Timer**. Breaks don't run them.
 
 ## Build from source
 
@@ -57,7 +67,7 @@ This builds, installs, and opens `/Applications/NotchApp.app`. Use `./build.sh -
 
 ## Agent questions and approvals
 
-NotchLab shows Claude Code and Codex permission requests in the notch with **Allow** and **Deny**, lets you answer Claude's multiple-choice questions there, and flashes a side alert when an agent finishes.
+NotchLab shows Claude Code and Codex permission requests in the notch with **Allow** and **Deny**, lets you answer Claude's questions there by picking options or typing your own answer, and flashes a side alert when an agent finishes.
 
 **To connect:** click **Connect Claude** and **Connect Codex** on the **Dev** page, or switch them on in **Settings → Connections**. NotchLab adds its bundled `notch-hook` helper to `~/.claude/settings.json` and `~/.codex/hooks.json`, keeps everything else in those files, and saves a one-time backup next to each as `*.before-notchapp`. Then:
 
@@ -99,4 +109,4 @@ While a request waits in the notch, the agent holds its terminal prompt, so the 
 
 - **Auto** (default): the notch while you're using the Mac. If you've been away for 2 minutes or the screen is locked, they go to the terminal, including any already waiting.
 - **Notch:** always in the notch.
-- **Terminal:** always in the terminal and Remote Control. If NotchLab isn't running, the hook exits immediately and the agents behave as usual. Codex questions aren't supported yet, only its approvals and finished alerts.
+- **Terminal:** always in the terminal and Remote Control. Switching to it sends any request already waiting in the notch back to the terminal within about 10 seconds. If NotchLab isn't running, the hook exits immediately and the agents behave as usual. Codex questions aren't supported yet, only its approvals and finished alerts.

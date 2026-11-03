@@ -7,7 +7,7 @@ struct HomeView: View {
         if model.notes.isOpen {
             NotesPanel(store: model.notes)
         } else {
-            let column = model.settings.visibleColumnCards
+            let column = model.homeColumn
             let showMusic = !model.settings.hiddenHomeCards.contains(.music)
             HStack(spacing: 14) {
                 if showMusic {
@@ -22,12 +22,16 @@ struct HomeView: View {
                 if !column.isEmpty {
                     VStack(spacing: 6) {
                         ForEach(column, id: \.self) { card in
-                            switch card {
-                            case .timer: TimerCard(timer: model.focusTimer).frame(height: 58)
-                            case .vpn: VPNRow(vpn: model.vpn).frame(height: 36)
-                            case .note: NoteRow(store: model.notes).frame(height: 36)
-                            case .music: EmptyView()
+                            Group {
+                                switch card {
+                                case .timer: TimerCard(timer: model.focusTimer)
+                                case .vpn: VPNRow(vpn: model.vpn)
+                                case .note: NoteRow(store: model.notes)
+                                case .meeting: if let meeting = model.meetings.next { MeetingRow(meeting: meeting, store: model.meetings) }
+                                case .music: EmptyView()
+                                }
                             }
+                            .frame(height: card.height)
                         }
                     }
                 }
@@ -47,6 +51,11 @@ struct HomeView: View {
             .animation(.spring(response: 0.32, dampingFraction: 0.86), value: model.mirror.isOn)
         }
     }
+}
+
+extension HomeCard {
+    /// Height in the column beside the music player.
+    var height: CGFloat { self == .timer ? 58 : 36 }
 }
 
 // MARK: Music
@@ -123,6 +132,7 @@ struct ArtworkView: View {
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 84, height: 84)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .shadow(color: (player.tint ?? .clear).opacity(0.55), radius: 12)
                     if let icon = player.appIcon {
                         Image(nsImage: icon)
                             .resizable()
@@ -154,7 +164,7 @@ struct ProgressRow: View {
             TimelineView(.periodic(from: .now, by: player.isPlaying ? 1 : 3600)) { context in
                 let elapsed = player.elapsed(at: context.date)
                 VStack(spacing: 4) {
-                    SeekBar(progress: elapsed / player.duration) { player.seek(to: $0 * player.duration) }
+                    SeekBar(progress: elapsed / player.duration, tint: player.tint ?? .white) { player.seek(to: $0 * player.duration) }
                     HStack {
                         Text(formatDuration(elapsed))
                         Spacer()
@@ -181,6 +191,7 @@ struct ProgressRow: View {
 
 struct SeekBar: View {
     let progress: Double
+    let tint: Color
     let onSeek: (Double) -> Void
     @State private var dragProgress: Double?
 
@@ -189,7 +200,7 @@ struct SeekBar: View {
             let value = min(max(dragProgress ?? progress, 0), 1)
             ZStack(alignment: .leading) {
                 Capsule().fill(.white.opacity(0.18))
-                Capsule().fill(.white).frame(width: max(4, geometry.size.width * value))
+                Capsule().fill(tint).frame(width: max(4, geometry.size.width * value))
             }
             .frame(height: dragProgress == nil ? 4 : 6)
             .frame(maxHeight: .infinity)
@@ -203,6 +214,53 @@ struct SeekBar: View {
         }
         .frame(height: 10)
         .animation(.easeOut(duration: 0.12), value: dragProgress == nil)
+        .animation(.easeOut(duration: 0.4), value: tint)
+    }
+}
+
+/// Beside the closed notch while music plays: the artwork on one side, bars in its color on the other.
+struct MusicWings: View {
+    let player: NowPlaying
+    let notchWidth: CGFloat
+    let wing: CGFloat
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Group {
+                if let image = player.artwork ?? player.appIcon {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 20, height: 20)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                }
+            }
+            .frame(width: wing)
+            Spacer(minLength: notchWidth)
+            EqualizerBars(color: player.tint ?? .white)
+                .frame(width: wing)
+        }
+    }
+}
+
+/// Bars that bounce while music plays. They don't follow the audio: real levels would need
+/// Screen Recording access.
+struct EqualizerBars: View {
+    let color: Color
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.25)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 2) {
+                ForEach(0..<4, id: \.self) { index in
+                    let phase = t * (1.7 + Double(index) * 0.6) + Double(index)
+                    Capsule().fill(color).frame(width: 2.5, height: 4 + 10 * abs(sin(phase)))
+                }
+            }
+            .frame(height: 14)
+            .animation(.easeInOut(duration: 0.25), value: t)
+        }
+        .accessibilityHidden(true)
     }
 }
 
@@ -251,10 +309,14 @@ struct TimerCard: View {
                         roundButton("arrow.counterclockwise", label: "Reset timer", fill: .white.opacity(0.14), action: timer.reset)
                     }
                     HStack(spacing: 4) {
-                        ForEach(FocusTimer.presets) { preset in
-                            presetButton(preset)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 4) {
+                                ForEach(timer.allPresets) { preset in
+                                    presetButton(preset)
+                                }
+                            }
                         }
-                        Spacer(minLength: 0)
+                        .scrollBounceBehavior(.basedOnSize)
                         SessionDots(count: timer.sessionsToday)
                     }
                 }
@@ -282,7 +344,7 @@ struct TimerCard: View {
                 .background(Capsule().fill(selected ? preset.color.opacity(0.22) : .white.opacity(0.06)))
         }
         .buttonStyle(.plain)
-        .help("\(preset.name) · \(timer.minutes(for: preset)) min")
+        .help("\(preset.name) · \(timer.minutes(for: preset)) min" + (preset.bank ? " · keeps leftover time" : ""))
     }
 
     private func roundButton(_ symbol: String, label: String, fill: Color, action: @escaping () -> Void) -> some View {
@@ -455,6 +517,88 @@ struct ConfettiBurst: View {
                                  with: .color(piece.color))
                 }
             }
+        }
+    }
+}
+
+// MARK: Meeting
+
+/// The next meeting, with a Join button when it has a video-call link.
+struct MeetingRow: View {
+    let meeting: Meeting
+    let store: MeetingsStore
+    @Environment(\.accent) private var accent
+
+    var body: some View {
+        Card(padding: 0) {
+            HStack(spacing: 8) {
+                Button(action: store.openCalendar) {
+                    HStack(spacing: 8) {
+                        Capsule().fill(meeting.color).frame(width: 3, height: 20)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(meeting.title)
+                                .font(.system(size: 11, weight: .semibold))
+                                .lineLimit(1)
+                            TimelineView(.periodic(from: .now, by: 30)) { context in
+                                Text(subtitle(at: context.date))
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.45))
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Open Calendar")
+                if let url = meeting.joinURL {
+                    Button { NSWorkspace.shared.open(url) } label: {
+                        Text("Join")
+                            .font(.system(size: 10.5, weight: .bold))
+                            .padding(.horizontal, 10)
+                            .frame(height: 22)
+                            .background(Capsule().fill(accent ?? .green))
+                    }
+                    .buttonStyle(PressableStyle())
+                    .help("Join on \(url.host ?? "the call")")
+                }
+            }
+            .padding(.horizontal, 10)
+        }
+    }
+
+    private func subtitle(at date: Date) -> String {
+        let countdown = meeting.countdown(at: date)
+        let time = (countdown == "Now" ? meeting.end : meeting.start).formatted(date: .omitted, time: .shortened)
+        return countdown == "Now" ? "Now · until \(time)" : "\(countdown) · \(time)"
+    }
+}
+
+/// Beside the closed notch from 10 minutes before a meeting until just after it starts.
+struct MeetingWings: View {
+    let meeting: Meeting
+    let notchWidth: CGFloat
+    let wing: CGFloat
+
+    var body: some View {
+        HStack(spacing: 0) {
+            HStack(spacing: 5) {
+                Circle().fill(meeting.color).frame(width: 6, height: 6)
+                Text(meeting.title)
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 8)
+            .frame(width: wing)
+            Spacer(minLength: notchWidth)
+            TimelineView(.periodic(from: .now, by: 15)) { context in
+                Text(meeting.countdown(at: context.date))
+                    .font(.system(size: 10.5, weight: .bold).monospacedDigit())
+                    .lineLimit(1)
+            }
+            .frame(width: wing)
         }
     }
 }

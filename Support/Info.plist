@@ -17,9 +17,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.2</string>
+    <string>1.3</string>
     <key>CFBundleVersion</key>
-    <string>3</string>
+    <string>4</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>
@@ -28,6 +28,10 @@
     <true/>
     <key>NSAppleEventsUsageDescription</key>
     <string>When you pick Spotify or Apple Music in Settings, the music player controls that app directly.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Shows your next meeting on Home and beside the notch, with a Join button for video calls.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Shows your next meeting on Home and beside the notch, with a Join button for video calls.</string>
     <key>NSCameraUsageDescription</key>
     <string>The mirror shows your camera inside the notch.</string>
     <key>NSRemindersFullAccessUsageDescription</key>

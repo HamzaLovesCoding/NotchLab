@@ -104,10 +104,12 @@ private struct QuestionsView: View {
     let questions: [AgentQuestion]
     @State private var step = 0
     @State private var picks: [Int: Set<String>] = [:]
+    /// Answers typed in instead of picked, like "Other" in the terminal.
+    @State private var typed: [Int: String] = [:]
 
     private var question: AgentQuestion { questions[min(step, questions.count - 1)] }
     private var isLast: Bool { step >= questions.count - 1 }
-    private var answered: Bool { !(picks[question.id] ?? []).isEmpty }
+    private var answered: Bool { !answer(to: question).isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -130,8 +132,31 @@ private struct QuestionsView: View {
                     optionButton(option)
                 }
             }
+            typedAnswerField
             Spacer(minLength: 0)
         }
+    }
+
+    private var typedAnswerField: some View {
+        let text = Binding(get: { typed[question.id] ?? "" }, set: { value in
+            typed[question.id] = value
+            // One answer is either picked or typed; with multi-select they add up.
+            if !question.multiSelect, !value.isEmpty { picks[question.id] = nil }
+        })
+        return HStack(spacing: 6) {
+            Image(systemName: "pencil")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.4))
+            TextField(question.multiSelect ? "Add your own answer" : "Or type your own answer", text: text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11.5, weight: .medium))
+                .onSubmit(advance)
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 26)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(0.06)))
+        // A fresh field per question, so text being edited doesn't carry over to the next one.
+        .id(question.id)
     }
 
     private func optionButton(_ option: AgentQuestion.Option) -> some View {
@@ -171,19 +196,24 @@ private struct QuestionsView: View {
             if chosen.contains(option.label) { chosen.remove(option.label) } else { chosen.insert(option.label) }
         } else {
             chosen = [option.label]
+            typed[question.id] = nil
         }
         picks[question.id] = chosen
+    }
+
+    /// Picked labels in the agent's order rather than click order, then anything typed.
+    private func answer(to question: AgentQuestion) -> String {
+        var parts = question.options.map(\.label).filter { picks[question.id]?.contains($0) == true }
+        let custom = (typed[question.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !custom.isEmpty { parts.append(custom) }
+        return parts.joined(separator: ", ")
     }
 
     private func advance() {
         guard answered else { return }
         if !isLast { step += 1; return }
         var answers: [String: String] = [:]
-        for question in questions {
-            // Keep the agent's option order rather than click order.
-            let labels = question.options.map(\.label).filter { picks[question.id]?.contains($0) == true }
-            answers[question.text] = labels.joined(separator: ", ")
-        }
+        for question in questions { answers[question.text] = answer(to: question) }
         monitor.answer(request, with: answers)
     }
 }
@@ -254,7 +284,7 @@ struct AgentSessionsCard: View {
     }
 
     private func refresh() {
-        unconnected = [AgentKind.claude, .codex].filter { !AgentHooks.isConnected($0) }
+        unconnected = [AgentKind.claude, .codex].filter { AgentHooks.isInstalled($0) && !AgentHooks.isConnected($0) }
     }
 }
 
@@ -301,7 +331,9 @@ private struct SessionRow: View {
                     .foregroundStyle(.white.opacity(0.5))
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                if hovering, session.status == .finished {
+                // Working rows can be dismissed too: an interrupted turn never sends Stop, so it
+                // would say "Working…" forever. Its next event brings the row back.
+                if hovering, monitor.request(for: session) == nil {
                     Button { monitor.dismiss(session) } label: {
                         Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white.opacity(0.5))
                     }

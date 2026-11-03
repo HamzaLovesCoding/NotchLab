@@ -29,18 +29,15 @@ struct NotchShape: Shape {
 
 struct NotchRootView: View {
     let model: NotchModel
-    private static let celebrationWing: CGFloat = 64
-    private static let agentWing: CGFloat = 88
 
     var body: some View {
         let expanded = model.isExpanded
         let celebrating = model.focusTimer.celebrating
-        // Questions and approvals always show; the "Done" flash can be turned off in Settings.
-        let agentAlert = model.agents.alert.flatMap { $0.pending || model.settings.showFinishedAlert ? $0 : nil }
-        let showWings = (celebrating || agentAlert != nil) && !expanded
+        let activity = expanded ? nil : model.activity
+        let showWings = activity != nil
         let size = expanded ? model.panelSize : model.notchSize
-        let wing = celebrating ? Self.celebrationWing : Self.agentWing
-        let width = size.width + (showWings ? wing * 2 : 0)
+        let wing = activity?.wing ?? 0
+        let width = size.width + wing * 2
         let ear: CGFloat = expanded ? 10 : 0
         // Collapsed corners are rounder than the hardware notch so no black pixel can peek
         // out from under it; width and height match the notch exactly.
@@ -53,12 +50,15 @@ struct NotchRootView: View {
                     .transition(.asymmetric(
                         insertion: .opacity.animation(.easeOut(duration: 0.18).delay(0.06)),
                         removal: .opacity.animation(.easeIn(duration: 0.08))))
-            } else if showWings {
+            } else if let activity {
+                let notchWidth = model.notchSize.width
                 Group {
-                    if celebrating {
-                        CelebrationWings(timer: model.focusTimer, notchWidth: model.notchSize.width, wing: wing)
-                    } else if let agentAlert {
-                        AgentWings(alert: agentAlert, notchWidth: model.notchSize.width, wing: wing)
+                    switch activity {
+                    case .celebration: CelebrationWings(timer: model.focusTimer, notchWidth: notchWidth, wing: wing)
+                    case .agent(let alert): AgentWings(alert: alert, notchWidth: notchWidth, wing: wing)
+                    case .usage(let warning): UsageWings(warning: warning, notchWidth: notchWidth, wing: wing)
+                    case .meeting(let meeting): MeetingWings(meeting: meeting, notchWidth: notchWidth, wing: wing)
+                    case .music: MusicWings(player: model.nowPlaying, notchWidth: notchWidth, wing: wing)
                     }
                 }
                 .frame(width: width, height: size.height)
@@ -72,6 +72,7 @@ struct NotchRootView: View {
         .animation(.spring(response: 0.34, dampingFraction: 0.84), value: expanded)
         .animation(.spring(response: 0.3, dampingFraction: 0.88), value: model.panelSize)
         .animation(.spring(response: 0.4, dampingFraction: 0.68), value: showWings)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: wing)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .overlay {
             if celebrating {

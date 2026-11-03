@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import SwiftUI
 
 /// What the music player shows and controls, picked in Settings › Home.
 enum MediaSource: String, CaseIterable {
@@ -42,7 +43,11 @@ final class NowPlaying {
     private(set) var artist = ""
     private(set) var duration: Double = 0
     private(set) var isPlaying = false
-    private(set) var artwork: NSImage?
+    private(set) var artwork: NSImage? {
+        didSet { if artwork !== oldValue { tint = artwork.flatMap(Self.tint(of:)) } }
+    }
+    /// The artwork's color, brightened to read on black; nil for gray art.
+    private(set) var tint: Color?
     private(set) var appIcon: NSImage?
     private(set) var appName = ""
     private(set) var bundleID: String?
@@ -102,8 +107,11 @@ final class NowPlaying {
     // MARK: Commands
 
     func togglePlayPause() {
-        isPlaying.toggle()
-        if !isPlaying { freezePosition() }
+        // With nothing loaded there's no telling whether anything will play; wait for the report.
+        if hasContent {
+            isPlaying.toggle()
+            if !isPlaying { freezePosition() }
+        }
         // playpause also opens the app if it's closed.
         if source == .automatic { send("toggle") } else { tellApp("playpause") }
     }
@@ -175,6 +183,8 @@ final class NowPlaying {
         process.terminationHandler = { [weak self] _ in
             DispatchQueue.main.async { self?.bridgeExited() }
         }
+        // A command sent just after the bridge died would otherwise kill NotchLab with SIGPIPE.
+        _ = fcntl(input.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
         do {
             try process.run()
             self.process = process
@@ -202,11 +212,13 @@ final class NowPlaying {
     }
 
     private func apply(_ update: NowPlayingUpdate) {
-        restartDelay = 1
+        // The bridge reports an error right before it exits, so that mustn't reset the backoff.
         if update.error {
             bridgeFailed = true
             return
         }
+        restartDelay = 1
+        bridgeFailed = false
         if let artworkData = update.artwork {
             bridgeArtwork = NSImage(data: artworkData)
         } else if update.noArtwork || update.empty {
@@ -248,6 +260,32 @@ final class NowPlaying {
             appIcon = nil
             appName = ""
         }
+    }
+
+    /// Averages the artwork down to one color, then lifts its brightness so bars and the
+    /// progress line stay visible on the black notch.
+    private static func tint(of image: NSImage) -> Color? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let side = 8
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8,
+                                          bytesPerRow: side * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.interpolationQuality = .medium
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: side, height: side))
+            return true
+        }
+        guard drawn else { return nil }
+        var sums = [0.0, 0.0, 0.0]
+        for index in stride(from: 0, to: pixels.count, by: 4) {
+            for channel in 0..<3 { sums[channel] += Double(pixels[index + channel]) }
+        }
+        let count = Double(side * side) * 255
+        let average = NSColor(srgbRed: sums[0] / count, green: sums[1] / count, blue: sums[2] / count, alpha: 1)
+        guard average.saturationComponent > 0.15 else { return nil }
+        return Color(hue: average.hueComponent, saturation: min(average.saturationComponent * 1.2, 0.85),
+                     brightness: max(average.brightnessComponent, 0.85))
     }
 
     // MARK: A picked app

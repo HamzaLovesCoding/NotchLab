@@ -44,6 +44,13 @@ static void emit(NSDictionary *object) {
     }
 }
 
+// JSON can't hold NaN or infinity, and NSJSONSerialization throws on them (live streams can
+// report an infinite duration), so anything that isn't a finite number becomes 0.
+static NSNumber *finite(id value) {
+    if (![value isKindOfClass:[NSNumber class]] || !isfinite([value doubleValue])) return @0;
+    return value;
+}
+
 static void publish(void) {
     mrGetInfo(queue, ^(NSDictionary *info) {
         mrGetIsPlaying(queue, ^(BOOL playing) {
@@ -58,9 +65,9 @@ static void publish(void) {
                 }
                 out[@"title"] = title;
                 out[@"artist"] = info[@"kMRMediaRemoteNowPlayingInfoArtist"] ?: @"";
-                out[@"duration"] = info[@"kMRMediaRemoteNowPlayingInfoDuration"] ?: @0;
-                out[@"elapsed"] = info[@"kMRMediaRemoteNowPlayingInfoElapsedTime"] ?: @0;
-                out[@"rate"] = info[@"kMRMediaRemoteNowPlayingInfoPlaybackRate"] ?: @0;
+                out[@"duration"] = finite(info[@"kMRMediaRemoteNowPlayingInfoDuration"]);
+                out[@"elapsed"] = finite(info[@"kMRMediaRemoteNowPlayingInfoElapsedTime"]);
+                out[@"rate"] = finite(info[@"kMRMediaRemoteNowPlayingInfoPlaybackRate"]);
                 NSDate *timestamp = info[@"kMRMediaRemoteNowPlayingInfoTimestamp"];
                 out[@"timestamp"] = @([(timestamp ?: [NSDate date]) timeIntervalSince1970]);
 

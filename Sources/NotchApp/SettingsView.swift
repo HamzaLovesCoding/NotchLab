@@ -75,8 +75,10 @@ struct SettingsView: View {
 private struct ConnectionSettings: View {
     let model: NotchModel
     @State private var agents: Set<AgentKind> = []
+    @State private var installed: Set<AgentKind> = []
     @State private var camera = AVCaptureDevice.authorizationStatus(for: .video)
     @State private var reminders = EKEventStore.authorizationStatus(for: .reminder)
+    @State private var calendar = EKEventStore.authorizationStatus(for: .event)
     @State private var accessibility = AXIsProcessTrusted()
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var connecting = false
@@ -84,8 +86,9 @@ private struct ConnectionSettings: View {
     var body: some View {
         let claude = model.usage.claude
         let signedIn = claude.note != ClaudeLimits.signedOutNote
-        let done = [agents.contains(.claude), agents.contains(.codex), camera == .authorized,
-                    reminders == .fullAccess, accessibility, launchAtLogin]
+        // An agent that isn't on this Mac doesn't count against "all connected".
+        let agentsDone = [AgentKind.claude, .codex].filter { installed.contains($0) || agents.contains($0) }.map(agents.contains)
+        let done = agentsDone + [camera == .authorized, reminders == .fullAccess, calendar == .fullAccess, accessibility, launchAtLogin]
         let allDone = !done.contains(false)
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
@@ -134,6 +137,14 @@ private struct ConnectionSettings: View {
             }
         }
         RowDivider()
+        permissionRow("Calendar", detail: "Your next meeting on Home and by the notch", symbol: "calendar",
+                      granted: calendar == .fullAccess, undecided: calendar == .notDetermined, pane: "Privacy_Calendars") {
+            Task {
+                await model.meetings.requestAccess().value
+                refresh()
+            }
+        }
+        RowDivider()
         // macOS only offers the prompt; once dismissed, the switch lives in System Settings.
         permissionRow("VPN control", detail: "Lets the VPN switch work apps like ProtonVPN", symbol: "lock.shield.fill",
                       granted: accessibility, undecided: true, pane: "Privacy_Accessibility",
@@ -162,7 +173,8 @@ private struct ConnectionSettings: View {
 
     private func agentRow(_ agent: AgentKind, title: String, detail: String) -> some View {
         let isConnected = agents.contains(agent)
-        return SettingRow(title: title, detail: isConnected ? detail : "Not connected", icon: agent) {
+        let status = installed.contains(agent) ? "Not connected" : "Not installed on this Mac"
+        return SettingRow(title: title, detail: isConnected ? detail : status, icon: agent) {
             SwitchView(isOn: isConnected) {
                 setAgentHooks(agent, connected: !isConnected)
                 refresh()
@@ -186,8 +198,11 @@ private struct ConnectionSettings: View {
     private func refresh() {
         let connected = Set([AgentKind.claude, .codex].filter(AgentHooks.isConnected))
         if connected != agents { agents = connected }
+        let found = Set([AgentKind.claude, .codex].filter(AgentHooks.isInstalled))
+        if found != installed { installed = found }
         camera = AVCaptureDevice.authorizationStatus(for: .video)
         reminders = EKEventStore.authorizationStatus(for: .reminder)
+        calendar = EKEventStore.authorizationStatus(for: .event)
         accessibility = AXIsProcessTrusted()
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
@@ -205,7 +220,7 @@ private struct ConnectionSettings: View {
     private func connectAll() {
         connecting = true
         Task {
-            for agent in [AgentKind.claude, .codex] where !AgentHooks.isConnected(agent) {
+            for agent in [AgentKind.claude, .codex] where AgentHooks.isInstalled(agent) && !AgentHooks.isConnected(agent) {
                 setAgentHooks(agent, connected: true)
             }
             if SMAppService.mainApp.status != .enabled { setLaunchAtLogin(true) }
@@ -214,6 +229,9 @@ private struct ConnectionSettings: View {
             }
             if EKEventStore.authorizationStatus(for: .reminder) == .notDetermined {
                 await model.reminders.requestAccess().value
+            }
+            if EKEventStore.authorizationStatus(for: .event) == .notDetermined {
+                await model.meetings.requestAccess().value
             }
             if !AXIsProcessTrusted() { model.vpn.requestAppControlPermission() }
             refresh()
@@ -297,7 +315,10 @@ private struct HomeSettings: View {
             RowDivider()
             let index = settings.homeOrder.firstIndex(of: card) ?? 0
             let place = index == 0 ? "Top" : index == settings.homeOrder.count - 1 ? "Bottom" : "Middle"
-            cardRow(card, detail: "\(place) of the column beside the music") {
+            let detail = card != .meeting ? "\(place) of the column beside the music"
+                : model.meetings.hasAccess ? "\(place) of the column, and by the notch just before"
+                : "Allow Calendar in Connections first"
+            cardRow(card, detail: detail) {
                 HStack(spacing: 0) {
                     moveButton("chevron.up", label: "Move \(card.title) up", enabled: index > 0) {
                         settings.moveColumnCard(card, by: -1)
@@ -314,6 +335,10 @@ private struct HomeSettings: View {
                 settings.showMirrorButton.toggle()
                 if !settings.showMirrorButton { model.mirror.isOn = false }
             }
+        }
+        RowDivider()
+        SettingRow(title: "Music beside the notch", detail: "Artwork and bars while something plays") {
+            SwitchView(isOn: settings.showMusicWing) { settings.showMusicWing.toggle() }
         }
     }
 
@@ -394,6 +419,10 @@ private struct AgentSettings: View {
         SettingRow(title: "Flash when an agent finishes", detail: "A green Done beside the closed notch") {
             SwitchView(isOn: settings.showFinishedAlert) { settings.showFinishedAlert.toggle() }
         }
+        RowDivider()
+        SettingRow(title: "Usage warnings", detail: "Flash at 80% and 95% of a Claude or Codex limit") {
+            SwitchView(isOn: settings.usageWarnings) { settings.usageWarnings.toggle() }
+        }
         Text("A question answered in the notch doesn't appear in the terminal or Remote Control. Auto keeps them in the notch while you're using the Mac, and sends them to the terminal once you've been away for 2 minutes. Connect Claude Code and Codex in Connections.")
             .font(.system(size: 10, weight: .medium))
             .foregroundStyle(.white.opacity(0.35))
@@ -413,6 +442,7 @@ private struct AgentSettings: View {
 private struct TimerSettings: View {
     let timer: FocusTimer
     let settings: AppSettings
+    @State private var shortcuts: [String] = []
     private static let ranges = ["Focus": 5...120, "Break": 1...30, "Deep": 10...180]
     private static let sounds = ((try? FileManager.default.contentsOfDirectory(atPath: "/System/Library/Sounds")) ?? [])
         .map { ($0 as NSString).deletingPathExtension }
@@ -426,6 +456,24 @@ private struct TimerSettings: View {
             }
             RowDivider()
         }
+        ForEach(settings.customPresets) { custom in
+            CustomPresetRow(timer: timer, settings: settings, custom: custom)
+            RowDivider()
+        }
+        SettingRow(title: "Your presets", detail: "Like debate speeches; prep time can keep what's left") {
+            PillButton(title: "Add preset") {
+                settings.customPresets.append(CustomPreset(name: "Preset \(settings.customPresets.count + 1)", minutes: 5))
+            }
+        }
+        RowDivider()
+        SettingRow(title: "When a countdown starts", detail: "Run a Shortcut, like one that turns on a Focus") {
+            shortcutMenu(settings.focusStartShortcut) { settings.focusStartShortcut = $0 }
+        }
+        RowDivider()
+        SettingRow(title: "When it ends or resets", detail: "Breaks don't run either Shortcut") {
+            shortcutMenu(settings.focusEndShortcut) { settings.focusEndShortcut = $0 }
+        }
+        RowDivider()
         SettingRow(title: "Sound when done", detail: "Plays when a countdown ends") {
             MenuButton(title: settings.timerSound.isEmpty ? "None" : settings.timerSound) {
                 [ActionMenuItem("None", checked: settings.timerSound.isEmpty) { settings.timerSound = "" }, .separator()]
@@ -441,6 +489,59 @@ private struct TimerSettings: View {
         SettingRow(title: "Celebration", detail: "Confetti and a check beside the notch") {
             SwitchView(isOn: settings.timerCelebration) { settings.timerCelebration.toggle() }
         }
+        .task { shortcuts = await Task.detached { FocusTimer.shortcutNames() }.value }
+    }
+
+    private func shortcutMenu(_ current: String, set: @escaping (String) -> Void) -> some View {
+        MenuButton(title: current.isEmpty ? "None" : current) {
+            var items: [NSMenuItem] = [ActionMenuItem("None", checked: current.isEmpty) { set("") }, .separator()]
+            if shortcuts.isEmpty {
+                let none = NSMenuItem(title: "No shortcuts in the Shortcuts app", action: nil, keyEquivalent: "")
+                none.isEnabled = false
+                items.append(none)
+            }
+            return items + shortcuts.map { name in ActionMenuItem(name, checked: current == name) { set(name) } }
+        }
+    }
+}
+
+/// A preset added in Settings: its name, whether it keeps leftover time, and its length.
+private struct CustomPresetRow: View {
+    let timer: FocusTimer
+    let settings: AppSettings
+    let custom: CustomPreset
+
+    var body: some View {
+        HStack(spacing: 8) {
+            TextField("Name", text: Binding(get: { custom.name }, set: { name in update { $0.name = name } }))
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, weight: .semibold))
+            Text("Keep leftover")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.45))
+                .fixedSize()
+            SwitchView(isOn: custom.bank) { update { $0.bank.toggle() } }
+                .help("Like a prep-time bank: pick it again to carry on where you left off")
+                .accessibilityLabel("Keep leftover time")
+            MinutesStepper(value: custom.minutes, range: 1...180, step: 1) {
+                timer.setMinutes($0, for: TimerPreset(custom: custom))
+            }
+            Button { timer.remove(custom) } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressableStyle())
+            .accessibilityLabel("Delete \(custom.name)")
+        }
+        .frame(height: 40)
+    }
+
+    private func update(_ change: (inout CustomPreset) -> Void) {
+        guard let index = settings.customPresets.firstIndex(where: { $0.id == custom.id }) else { return }
+        change(&settings.customPresets[index])
     }
 }
 
@@ -574,7 +675,7 @@ private struct MenuButton: View {
     var body: some View {
         Button { popUpMenu(items()) } label: {
             HStack(spacing: 5) {
-                Text(title).font(.system(size: 11, weight: .semibold))
+                Text(title).font(.system(size: 11, weight: .semibold)).lineLimit(1).frame(maxWidth: 150)
                 Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .bold))
             }
             .foregroundStyle(.white.opacity(0.85))

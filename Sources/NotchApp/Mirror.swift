@@ -15,8 +15,12 @@ final class Mirror {
     @ObservationIgnored let session = AVCaptureSession()
     @ObservationIgnored private var configured = false
     @ObservationIgnored private let queue = DispatchQueue(label: "notch.mirror")
+    /// True between start() and stop(). The camera prompt and session startup finish later,
+    /// and by then the tile may be gone; starting anyway would leave the camera on unseen.
+    @ObservationIgnored private var wanted = false
 
     func start() {
+        wanted = true
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             run()
@@ -24,7 +28,7 @@ final class Mirror {
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 DispatchQueue.main.async {
                     guard let self else { return }
-                    if granted { self.run() } else { self.message = "Camera access denied" }
+                    if !granted { self.message = "Camera access denied" } else if self.wanted { self.run() }
                 }
             }
         default:
@@ -34,6 +38,7 @@ final class Mirror {
 
     func stop() {
         let session = session
+        wanted = false
         isRunning = false
         queue.async {
             if session.isRunning { session.stopRunning() }
@@ -61,7 +66,8 @@ final class Mirror {
                 return
             }
             if !session.isRunning { session.startRunning() }
-            DispatchQueue.main.async { self?.isRunning = true }
+            // A stop() queued behind this has already turned the camera back off.
+            DispatchQueue.main.async { if self?.wanted == true { self?.isRunning = true } }
         }
     }
 }

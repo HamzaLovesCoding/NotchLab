@@ -25,6 +25,24 @@ enum NotchTab: String, CaseIterable {
 
 enum DropTarget { case shelf, airDrop }
 
+/// What shows beside the closed notch.
+enum NotchActivity {
+    case celebration
+    case agent(AgentAlert)
+    case usage(UsageWarning)
+    case meeting(Meeting)
+    case music
+
+    /// Width of each side.
+    var wing: CGFloat {
+        switch self {
+        case .celebration: 64
+        case .agent, .usage, .meeting: 88
+        case .music: 40
+        }
+    }
+}
+
 /// UI state shared between the AppKit window controller and the SwiftUI views.
 @Observable
 @MainActor
@@ -33,7 +51,9 @@ final class NotchModel {
     var tab: NotchTab = .home
     var statDetail: StatKind?
     var showClipboard = false
-    var showSettings = false
+    var showSettings = false {
+        didSet { if !showSettings { showWelcome = false } }
+    }
     /// The first time the notch opens, Settings shows Connections with a welcome line.
     var showWelcome = false
     var notchSize = CGSize(width: 200, height: 32)
@@ -53,9 +73,10 @@ final class NotchModel {
     let clipboard: ClipboardHistory
     let shelf = Shelf()
     let reminders = RemindersStore()
-    let usage = UsageStore()
+    let usage: UsageStore
     let system = SystemMonitor()
     let agents: AgentMonitor
+    let meetings = MeetingsStore()
 
     init() {
         let settings = AppSettings()
@@ -64,6 +85,7 @@ final class NotchModel {
         nowPlaying = NowPlaying(settings: settings)
         focusTimer = FocusTimer(settings: settings)
         clipboard = ClipboardHistory(settings: settings)
+        usage = UsageStore(settings: settings)
         tab = settings.startTab ?? .home
         // The next hover should land on the request, so switch pages while the notch is closed.
         agents.onRequest = { [weak self] in
@@ -75,6 +97,8 @@ final class NotchModel {
 
     /// Vertical padding around page content (6 above, 14 below).
     static let pagePadding: CGFloat = 20
+    /// Questions get more room than approvals for the typed-answer field.
+    static let questionHeight: CGFloat = 200
     private static let clipboardArea: CGFloat = 330
 
     /// Tabs shown in the top bar. Dev comes back while an agent waits, so a request is never stranded.
@@ -97,23 +121,48 @@ final class NotchModel {
     var pageArea: CGFloat {
         if showSettings { return 320 }
         return switch tab {
-        case .home: notes.isOpen ? 190 : 162
+        case .home: notes.isOpen ? 190 : homeArea
         case .shelf: 140
         case .reminders: 236
         case .dev: statDetail == nil ? devArea : 330
         }
     }
 
-    /// The usage row is 160 tall and the stats/sessions row 82, with 10 between them.
+    /// Cards in the column beside the music; the meeting card only while there's a meeting.
+    var homeColumn: [HomeCard] {
+        settings.visibleColumnCards.filter { $0 != .meeting || meetings.next != nil }
+    }
+
+    /// The music player needs 142; the column only grows past it with all four cards.
+    private var homeArea: CGFloat {
+        let column = homeColumn.reduce(0) { $0 + $1.height } + CGFloat(max(homeColumn.count - 1, 0)) * 6
+        return max(142, column) + Self.pagePadding
+    }
+
+    /// The usage row is 160 tall (taller for a question) and the stats/sessions row 82, with 10 between them.
     private var devArea: CGFloat {
         let hidden = settings.hiddenDevCards
-        let top = !agents.requests.isEmpty || !hidden.contains(.usage)
+        let top: CGFloat = agents.requests.first.map { $0.isQuestion ? Self.questionHeight : 160 }
+            ?? (hidden.contains(.usage) ? 0 : 160)
         let bottom = !hidden.contains(.stats) || !hidden.contains(.sessions)
-        switch (top, bottom) {
-        case (true, true): return 272
-        case (true, false): return 180
+        switch (top > 0, bottom) {
+        case (true, true): return top + 10 + 82 + Self.pagePadding
+        case (true, false): return top + Self.pagePadding
         default: return 102
         }
+    }
+
+    /// The most urgent thing to show beside the closed notch, if any.
+    var activity: NotchActivity? {
+        if focusTimer.celebrating { return .celebration }
+        let alert = agents.alert
+        if let alert, alert.pending { return .agent(alert) }
+        if let warning = usage.warning { return .usage(warning) }
+        // Questions and approvals always show; the "Done" flash can be turned off in Settings.
+        if let alert, settings.showFinishedAlert { return .agent(alert) }
+        if let meeting = meetings.imminent, !settings.hiddenHomeCards.contains(.meeting) { return .meeting(meeting) }
+        if settings.showMusicWing, nowPlaying.isPlaying, nowPlaying.hasContent { return .music }
+        return nil
     }
 
     var panelSize: CGSize {

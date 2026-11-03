@@ -15,7 +15,7 @@ struct DevView: View {
                     // An agent waiting on you takes the top spot until it's answered.
                     if let request = model.agents.requests.first {
                         AgentRequestCard(request: request, monitor: model.agents)
-                            .frame(height: 160)
+                            .frame(height: request.isQuestion ? NotchModel.questionHeight : 160)
                     } else if !hidden.contains(.usage) {
                         HStack(spacing: 10) {
                             UsageCard(title: "Claude", usage: model.usage.claude)
@@ -41,7 +41,8 @@ struct DevView: View {
                 }
             }
         }
-        .onAppear { model.system.start() }
+        // Settings replaces this page, so turning the card back on re-runs onAppear.
+        .onAppear { if !model.settings.hiddenDevCards.contains(.stats) { model.system.start() } }
         .onDisappear { model.system.stop() }
         .onChange(of: model.statDetail) { _, kind in model.system.showDetail(kind) }
         .task {
@@ -95,6 +96,28 @@ struct UsageCard: View {
                     Spacer()
                 }
             }
+        }
+    }
+}
+
+/// Beside the closed notch for a few seconds when a limit passes 80% or 95%.
+struct UsageWings: View {
+    let warning: UsageWarning
+    let notchWidth: CGFloat
+    let wing: CGFloat
+
+    var body: some View {
+        HStack(spacing: 0) {
+            AgentIcon(agent: warning.agent, size: 18)
+                .frame(width: wing)
+            Spacer(minLength: notchWidth)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text("\(warning.percent)%").font(.system(size: 11, weight: .bold).monospacedDigit())
+                Text(warning.window.lowercased()).font(.system(size: 9.5, weight: .semibold)).opacity(0.75)
+            }
+            .foregroundStyle(warning.percent >= 95 ? Color.red : .orange)
+            .lineLimit(1)
+            .frame(width: wing)
         }
     }
 }

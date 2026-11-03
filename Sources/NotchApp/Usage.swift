@@ -22,6 +22,15 @@ struct TokenTotals: Sendable {
     }
 }
 
+/// A limit that just passed 80% or 95%, shown beside the closed notch for a few seconds.
+struct UsageWarning: Equatable {
+    let id = UUID()
+    let agent: AgentKind
+    /// "Session" or "Week".
+    let window: String
+    let percent: Int
+}
+
 struct ProviderUsage: Sendable {
     var plan: String?
     var session: LimitWindow?
@@ -37,10 +46,31 @@ struct ProviderUsage: Sendable {
 final class UsageStore {
     private(set) var claude = ProviderUsage()
     private(set) var codex = ProviderUsage()
+    private(set) var warning: UsageWarning?
     @ObservationIgnored private var lastRefresh: Date?
     @ObservationIgnored private var refreshing = false
     @ObservationIgnored private let claudeLogs = ClaudeLogScanner()
     @ObservationIgnored private let codexLogs = CodexLogScanner()
+    @ObservationIgnored private let settings: AppSettings
+    @ObservationIgnored private var timer: Timer?
+    /// The highest threshold (0, 80 or 95) each limit has reached, keyed like "claudeSession".
+    @ObservationIgnored private var levels: [String: Int] = [:]
+
+    init(settings: AppSettings) {
+        self.settings = settings
+    }
+
+    /// With usage warnings on, checks every 5 minutes even while the notch is closed.
+    func start() {
+        guard timer == nil else { return }
+        if settings.usageWarnings { refreshIfStale() }
+        timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.settings.usageWarnings else { return }
+                self.refreshIfStale()
+            }
+        }
+    }
 
     func refreshIfStale() {
         if let lastRefresh, Date().timeIntervalSince(lastRefresh) < 60 { return }
@@ -76,6 +106,26 @@ final class UsageStore {
             claude = newClaude
             codex = await codexUsage
             refreshing = false
+            checkLimits(.claude, claude)
+            checkLimits(.codex, codex)
+        }
+    }
+
+    /// Warns the first time a limit passes 80%, and again at 95%. The first reading after
+    /// launch only sets the starting point, so a restart doesn't repeat an old warning.
+    private func checkLimits(_ agent: AgentKind, _ usage: ProviderUsage) {
+        for (name, window) in [("Session", usage.session), ("Week", usage.week)] {
+            guard let used = window?.usedPercent else { continue }
+            let key = agent.rawValue + name
+            let level = [95, 80].first { used >= Double($0) } ?? 0
+            let previous = levels[key]
+            levels[key] = level
+            guard let previous, level > previous, settings.usageWarnings else { continue }
+            let shown = UsageWarning(agent: agent, window: name, percent: Int(used.rounded()))
+            warning = shown
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+                if self?.warning == shown { self?.warning = nil }
+            }
         }
     }
 }

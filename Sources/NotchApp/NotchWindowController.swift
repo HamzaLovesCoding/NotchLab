@@ -47,6 +47,8 @@ final class NotchWindowController {
         model.nowPlaying.start()
         model.clipboard.start()
         model.agents.start()
+        model.usage.start()
+        model.meetings.start()
     }
 
     func shutdown() {
@@ -155,7 +157,7 @@ final class NotchWindowController {
             let inside = expandedRect.contains(point)
             setInteractive(inside)
             // A file dragged onto an open notch goes to the shelf, not into the note editor.
-            if inside, fileDragActive, filesEnabled, model.tab != .shelf { model.tab = .shelf }
+            if inside, fileDragActive, filesEnabled { expand(to: .shelf) }
             if inside {
                 collapseWork?.cancel()
                 collapseWork = nil
@@ -212,7 +214,12 @@ final class NotchWindowController {
     func expand(to tab: NotchTab? = nil) {
         hoverWork?.cancel()
         hoverWork = nil
-        if let tab, model.tab != tab { model.tab = tab }
+        if let tab {
+            // The page asked for (the shelf, for a file drag) has to be visible, not under an overlay.
+            if model.showSettings { model.showSettings = false }
+            if model.showClipboard { model.showClipboard = false }
+            if model.tab != tab { model.tab = tab }
+        }
         // First open: show what can be connected, unless the notch opened for a drop or an agent.
         if !model.isExpanded, tab == nil, model.agents.requests.isEmpty, !model.settings.didShowSetup {
             model.settings.didShowSetup = true

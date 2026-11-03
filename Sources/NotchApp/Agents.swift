@@ -95,7 +95,7 @@ final class AgentMonitor {
                                    onMessage: { [weak self] data, fd in self?.handle(data, from: fd) ?? false },
                                    onClose: { [weak self] fd in self?.requests.removeAll { $0.connection == fd } })
         awayTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.handBackIfAway() }
+            MainActor.assumeIsolated { self?.handBackIfNeeded() }
         }
     }
 
@@ -146,9 +146,15 @@ final class AgentMonitor {
     }
 
     /// In Auto, a request still waiting when you step away goes back to the agent's own
-    /// prompt, so it shows up in the terminal and in Claude's Remote Control.
-    private func handBackIfAway() {
-        guard settings.promptRouting == .auto, !requests.isEmpty, Self.userIsAway else { return }
+    /// prompt, so it shows up in the terminal and in Claude's Remote Control. Switching to
+    /// Terminal sends back any that were already waiting.
+    private func handBackIfNeeded() {
+        guard !requests.isEmpty else { return }
+        switch settings.promptRouting {
+        case .notch: return
+        case .auto: guard Self.userIsAway else { return }
+        case .terminal: break
+        }
         let pending = requests
         pending.forEach { respond($0, nil) }
     }
