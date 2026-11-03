@@ -187,6 +187,7 @@
   const panel = el.querySelector('.nl-panel');
   const top = el.querySelector('.nl-top');
   const body = el.querySelector('.nl-body');
+  const demoControls = document.querySelector('.demo-controls');
 
   // Scale the 760px-wide stage to the screen it's on.
   new ResizeObserver(([entry]) => {
@@ -240,6 +241,11 @@
     if (entering) body.querySelector('.nl-page')?.classList.add('enter');
     tick();
     updateCaption();
+    demoControls.querySelectorAll('[data-demo-tab]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(s.open && !s.settings && !s.clipOpen && s.tab === button.dataset.demoTab));
+      button.disabled = s.prefs.hidden.has(button.dataset.demoTab);
+      button.title = button.disabled ? 'Enable this page in the demo Settings' : `Explore ${button.querySelector('span').textContent}`;
+    });
 
     if (key) {
       const [act, arg] = key.split('|');
@@ -551,7 +557,7 @@
       <div class="nl-sidebar">${SECTIONS.map(([name, ic]) => `
         <button type="button" class="${s.section === name ? 'active' : ''}" data-act="section" data-arg="${name}">${icon(ic)}${name}</button>`).join('')}
         <button class="quit" type="button" data-act="quit">${icon('power')}Quit NotchLab</button>
-        <small>Version 1.1</small>
+        <small>Version 1.2</small>
       </div>
       <div class="nl-card nl-prefs">${sections[s.section]()}</div>
     </div>`;
@@ -901,6 +907,16 @@
 
   pill.addEventListener('click', () => openNotch());
 
+  demoControls.hidden = false;
+  demoControls.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-demo-tab]');
+    if (!button || button.disabled) return;
+    saveQuickNote();
+    s.clipOpen = false;
+    ACTIONS.tab(button.dataset.demoTab);
+    openNotch(button.dataset.demoTab);
+  });
+
   el.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       if (!back()) { closeNotch(); pill.focus(); }
@@ -997,11 +1013,11 @@
   });
   el.addEventListener('focusout', () => {
     setTimeout(() => {
-      if (s.open && !inside && !el.contains(document.activeElement) && !isTouch) closeTimer = setTimeout(closeNotch, s.prefs.closeDelay);
+      if (s.open && !inside && !el.contains(document.activeElement) && !demoControls.contains(document.activeElement) && !isTouch) closeTimer = setTimeout(closeNotch, s.prefs.closeDelay);
     });
   });
   document.addEventListener('pointerdown', (event) => {
-    if (s.open && !el.contains(event.target)) closeNotch();
+    if (s.open && !el.contains(event.target) && !demoControls.contains(event.target)) closeNotch();
   });
 
   // ---- Dropping real files from the visitor's computer (they stay in the browser) ----
