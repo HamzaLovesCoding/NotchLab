@@ -110,3 +110,7 @@ While a request waits in the notch, the agent holds its terminal prompt, so the 
 - **Auto** (default): the notch while you're using the Mac. If you've been away for 2 minutes or the screen is locked, they go to the terminal, including any already waiting.
 - **Notch:** always in the notch.
 - **Terminal:** always in the terminal and Remote Control. Switching to it sends any request already waiting in the notch back to the terminal within about 10 seconds. If NotchLab isn't running, the hook exits immediately and the agents behave as usual. Codex questions aren't supported yet, only its approvals and finished alerts.
+
+## License
+
+[MIT](LICENSE)
